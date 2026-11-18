@@ -1,0 +1,139 @@
+{
+  "POST /api/auth/login": {
+    "summary": "Email/password login (mobile)",
+    "description": "Returns Supabase access_token and refresh_token for Bearer auth.",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": ["email", "password"],
+            "properties": {
+              "email": { "type": "string", "format": "email" },
+              "password": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "POST /api/auth/signup": {
+    "summary": "Register new user",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": ["email", "password"],
+            "properties": {
+              "email": { "type": "string" },
+              "password": { "type": "string", "minLength": 8 },
+              "full_name": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "POST /api/auth/refresh": {
+    "summary": "Refresh access token",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": ["refresh_token"],
+            "properties": { "refresh_token": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "POST /api/coupons/claim": {
+    "summary": "Claim voucher for an offer",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": ["offer_id"],
+            "properties": { "offer_id": { "type": "string", "format": "uuid" } }
+          }
+        }
+      }
+    }
+  },
+  "POST /api/coupons/apply": {
+    "summary": "Apply coupon code",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": ["code", "coupon_offer"],
+            "properties": {
+              "code": { "type": "string" },
+              "coupon_offer": { "type": "string", "format": "uuid" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "GET /api/restaurants/nearby": {
+    "summary": "Nearby restaurants and offers",
+    "parameters": [
+      { "name": "lat", "in": "query", "required": true, "schema": { "type": "number" } },
+      { "name": "lng", "in": "query", "required": true, "schema": { "type": "number" } },
+      { "name": "mode", "in": "query", "schema": { "type": "string", "default": "nearby" } }
+    ]
+  },
+  "GET /api/offers": {
+    "summary": "List active offers",
+    "parameters": [
+      { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+      { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
+      { "name": "search", "in": "query", "schema": { "type": "string" } }
+    ]
+  },
+  "POST /api/devices/register": {
+    "summary": "Register push notification device",
+    "requestBody": {
+      "required": true,
+      "content": {
+        "application/json": {
+          "schema": {
+            "type": "object",
+            "required": ["push_token"],
+            "properties": {
+              "push_token": { "type": "string" },
+              "platform": { "type": "string", "example": "ios" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "GET /api/admin/analytics": {
+    "summary": "Admin analytics KPIs",
+    "tag": "Admin"
+  },
+  "GET /api/live/pulse": {
+    "summary": "Flask live dashboard pulse",
+    "description": "Requires Flask admin session cookie.",
+    "tag": "Flask"
+  },
+  "GET /api/live/vouchers": {
+    "summary": "Flask live voucher feed",
+    "tag": "Flask"
+  },
+  "GET /api/health": {
+    "summary": "Flask admin health check",
+    "tag": "Flask"
+  }
+}

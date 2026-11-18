@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fff6f4;
+  --foreground: #32191e;
+  --surface: #ffffff;
+  --surface-muted: #f9eeec;
+  --border: #ad8285;
+  --plum: #4a1f26;
+  --crimson: #a82035;
+  --crimson-hover: #89192b;
+  --gold: #d4a24c;
+  --muted: #685159;
+  --focus: #164e63;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-size: 16px;
+}
+
+option {
+  background: var(--surface);
+  color: var(--plum);
+}
+
+input,
+select,
+textarea {
+  border-color: var(--border);
+}
+
+[class*="text-[9px]"],
+[class*="text-[10px]"],
+[class*="text-[11px]"] {
+  font-size: 0.75rem !important;
+}
+
+h1,
+h2,
+h3,
+.esr-serif {
+  color: var(--plum);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+input,
+select,
+a[href] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+select {
+  min-height: 44px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: #e9c2c2;
+  color: var(--plum);
+}
+
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  transform: translateY(-160%);
+  border-radius: 0.5rem;
+  background: var(--plum);
+  color: #fff;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.esr-eyebrow {
+  color: var(--crimson);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.esr-muted {
+  color: var(--muted);
+}
+
+.esr-card {
+  border: 1px solid var(--border);
+  border-radius: 1.125rem;
+  background: var(--surface);
+}
+
+.esr-chip {
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+  color: var(--plum);
+  padding: 0.625rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.esr-chip[aria-pressed="true"] {
+  border-color: var(--plum);
+  background: var(--plum);
+  color: #fff;
+}
+
+.esr-primary-button {
+  border: 1px solid var(--crimson);
+  border-radius: 0.75rem;
+  background: var(--crimson);
+  color: #fff;
+  font-weight: 700;
+}
+
+.esr-primary-button:hover {
+  background: var(--crimson-hover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

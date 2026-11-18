@@ -1,0 +1,532 @@
+{
+  "generatedAt": "2026-10-13T11:44:43.132Z",
+  "mobileBaseUrl": "https://esr-web-frontend.vercel.app/api",
+  "auth": {
+    "bearerHeader": "Authorization: Bearer <access_token>",
+    "login": "POST /api/auth/login",
+    "signup": "POST /api/auth/signup",
+    "refresh": "POST /api/auth/refresh",
+    "logout": "POST /api/auth/logout",
+    "orUseSupabaseSdk": true
+  },
+  "swaggerUi": "/api-docs",
+  "openApiJson": "/api/openapi.json",
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/admin/analytics",
+      "admin": true,
+      "auth": true,
+      "source": "next",
+      "file": "admin/analytics/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/discount-availed",
+      "admin": true,
+      "auth": true,
+      "source": "next",
+      "file": "admin/discount-availed/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/users",
+      "admin": true,
+      "auth": true,
+      "source": "next",
+      "file": "admin/users/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/users",
+      "admin": true,
+      "auth": true,
+      "source": "next",
+      "file": "admin/users/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/ads",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "ads/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/ads",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "ads/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/login/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/auth/login",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/login/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/logout/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/auth/logout",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/logout/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/refresh/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/auth/refresh",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/refresh/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signup",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/signup/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/auth/signup",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "auth/signup/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/coupons/apply",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "coupons/apply/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/coupons/claim",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "coupons/claim/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/coupons/{offerId}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "coupons/[offerId]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/coupons/{offerId}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "coupons/[offerId]/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/devices/register",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "devices/register/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/devices/register",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "devices/register/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/feed/stories",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "feed/stories/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/feed/stories",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "feed/stories/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/reviews",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "me/reviews/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/me/reviews",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "me/reviews/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/vouchers",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "me/vouchers/route.ts"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/me/vouchers",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "me/vouchers/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/offers/bumper",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "offers/bumper/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/offers/by-restaurant/{restaurantId}",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "offers/by-restaurant/[restaurantId]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/offers/featured",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "offers/featured/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/offers",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "offers/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/offers",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "offers/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/offers/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "offers/[id]/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/offers/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "offers/[id]/route.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/offers/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "offers/[id]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/profile",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "profile/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/profile",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "profile/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/featured",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "restaurants/featured/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/nearby",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "restaurants/nearby/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/photo",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "restaurants/photo/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "restaurants/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/restaurants",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "restaurants/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/top-rated",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "restaurants/top-rated/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/restaurants/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "restaurants/[id]/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/restaurants/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "restaurants/[id]/route.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/restaurants/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "restaurants/[id]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/by-restaurant/{restaurantId}",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "reviews/by-restaurant/[restaurantId]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/popular",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "reviews/popular/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reviews",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/{id}/comments",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/[id]/comments/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reviews/{id}/comments",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/[id]/comments/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/reviews/{id}/like",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/[id]/like/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/reviews/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/[id]/route.ts"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/reviews/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/[id]/route.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/reviews/{id}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "reviews/[id]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tags/{restaurantId}",
+      "admin": false,
+      "auth": false,
+      "source": "next",
+      "file": "tags/[restaurantId]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/version",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "version/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/version",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "version/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/wishlist",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "wishlist/route.ts"
+    },
+    {
+      "method": "POST",
+      "path": "/api/wishlist",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "wishlist/route.ts"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/wishlist/{offerId}",
+      "admin": false,
+      "auth": true,
+      "source": "next",
+      "file": "wishlist/[offerId]/route.ts"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "admin": false,
+      "auth": false,
+      "source": "flask"
+    },
+    {
+      "method": "OPTIONS",
+      "path": "/api/health",
+      "admin": false,
+      "auth": false,
+      "source": "flask"
+    },
+    {
+      "method": "GET",
+      "path": "/api/live/pulse",
+      "admin": true,
+      "auth": true,
+      "source": "flask"
+    },
+    {
+      "method": "GET",
+      "path": "/api/live/vouchers",
+      "admin": true,
+      "auth": true,
+      "source": "flask"
+    }
+  ]
+}
