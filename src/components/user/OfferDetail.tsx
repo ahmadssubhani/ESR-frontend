@@ -3,21 +3,17 @@ import { useState } from 'react'
 import { ArrowLeft, Star, MapPin, Clock, Heart, ChevronRight } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import RedemptionFlow from './RedemptionFlow'
-import { toggleSaveOffer } from '@/lib/supabase/client'
-import { toast } from 'sonner'
 
 interface Props {
   offer: Record<string, unknown>
   restaurantTags: string[]
-  userId: string | null
-  isSaved: boolean
+  isLoggedIn: boolean
 }
 
-export default function OfferDetail({ offer, restaurantTags, userId, isSaved }: Props) {
+export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props) {
   const router = useRouter()
   const [showRedemption, setShowRedemption] = useState(false)
-  const [inWishlist, setInWishlist] = useState(isSaved)
-  const [wishlistBusy, setWishlistBusy] = useState(false)
+  const [inWishlist, setInWishlist] = useState(false)
 
   const restaurant = offer.restaurants as Record<string, unknown>
   const reviews = (offer.reviews as Record<string, unknown>[]) || []
@@ -30,24 +26,30 @@ export default function OfferDetail({ offer, restaurantTags, userId, isSaved }: 
     : 0
 
   async function toggleWishlist() {
-    if (!userId) { router.push('/auth/login'); return }
+    if (!isLoggedIn) { router.push('/auth/login'); return }
     const offerId = offer.id as string
-    setWishlistBusy(true)
-    try {
-      const { error } = await toggleSaveOffer(userId, offerId, inWishlist)
-      if (error) {
-        console.error('Could not update saved offer:', error)
-        toast.error('Could not update your saved offers.')
-        return
-      }
-      setInWishlist(!inWishlist)
-      toast.success(inWishlist ? 'Removed from saved offers' : 'Saved to favourites')
-    } catch (error) {
-      console.error('Could not update saved offer:', error)
-      toast.error('Could not update your saved offers.')
-    } finally {
-      setWishlistBusy(false)
+    if (inWishlist) {
+      await fetch(`/api/wishlist/${offerId}`, { method: 'DELETE' })
+      try {
+        const raw = localStorage.getItem('esr_saved_offers')
+        const ids = raw ? JSON.parse(raw) : []
+        if (Array.isArray(ids)) {
+          const next = ids.filter((id: string) => id !== offerId)
+          localStorage.setItem('esr_saved_offers', JSON.stringify(next))
+          window.dispatchEvent(new Event('esr-saved-updated'))
+        }
+      } catch {}
+    } else {
+      await fetch('/api/wishlist', { method: 'POST', body: JSON.stringify({ offer_id: offerId }), headers: { 'Content-Type': 'application/json' } })
+      try {
+        const raw = localStorage.getItem('esr_saved_offers')
+        const ids = raw ? JSON.parse(raw) : []
+        const next = Array.isArray(ids) ? Array.from(new Set([...ids, offerId])) : [offerId]
+        localStorage.setItem('esr_saved_offers', JSON.stringify(next))
+        window.dispatchEvent(new Event('esr-saved-updated'))
+      } catch {}
     }
+    setInWishlist(!inWishlist)
   }
 
   return (
@@ -69,7 +71,7 @@ export default function OfferDetail({ offer, restaurantTags, userId, isSaved }: 
             {discountPct}% OFF
           </div>
         )}
-        <button type="button" disabled={wishlistBusy} aria-label={`${inWishlist ? 'Remove from' : 'Save to'} favourites`} aria-pressed={inWishlist} onClick={toggleWishlist} className={`absolute left-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white shadow ${inWishlist ? 'text-[var(--crimson)]' : 'text-[var(--muted)]'}`}>
+        <button type="button" aria-label={`${inWishlist ? 'Remove from' : 'Save to'} favourites`} aria-pressed={inWishlist} onClick={toggleWishlist} className={`absolute left-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white shadow ${inWishlist ? 'text-[var(--crimson)]' : 'text-gray-500'}`}>
           <Heart size={18} fill={inWishlist ? 'currentColor' : 'none'} />
         </button>
       </div>
@@ -117,7 +119,7 @@ export default function OfferDetail({ offer, restaurantTags, userId, isSaved }: 
         )}
 
         {/* Redeem Button */}
-        {!userId ? (
+        {!isLoggedIn ? (
           <button onClick={() => router.push('/auth/login')} className="esr-primary-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl py-4">
             Sign in to Claim <ChevronRight size={18} />
           </button>

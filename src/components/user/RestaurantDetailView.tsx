@@ -2,10 +2,10 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { ArrowLeft, Check, ChevronDown, Clock3, Copy, Heart, MapPin, Star } from 'lucide-react'
-import { createClient } from '@/lib/supabase/client'
-import { toast } from 'sonner'
+import { DEMO_POSTS } from '@/lib/demo-data'
+import { generateEsrVoucherCode, formatVoucherCountdown } from '@/lib/esr-voucher-code'
 
 interface Offer {
   id: string
@@ -55,6 +55,7 @@ interface Review {
 interface Props {
   restaurant: Restaurant
   offers: Offer[]
+  demoMode: boolean
   userId: string | null
   claimedOfferIds: Set<string>
   reviewedRestaurantIds: Set<string>
@@ -63,8 +64,50 @@ interface Props {
   onBack: () => void
 }
 
+function getRestaurantSavedSnapshot(restaurantId: string) {
+  try {
+    const raw = localStorage.getItem('esr_saved_restaurants')
+    const ids: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(ids) && ids.includes(restaurantId)
+  } catch (error) {
+    console.error('Could not read saved restaurants:', error)
+    return false
+  }
+}
+
+function subscribeToRestaurantSaves(callback: () => void) {
+  window.addEventListener('storage', callback)
+  window.addEventListener('esr-saved-restaurants-updated', callback)
+  return () => {
+    window.removeEventListener('storage', callback)
+    window.removeEventListener('esr-saved-restaurants-updated', callback)
+  }
+}
+
+function getDemoReviews(restaurantId: string): Review[] {
+  return DEMO_POSTS
+    .filter((post) => post.restaurantId === restaurantId)
+    .map((post) => ({
+      id: post.id,
+      rating_overall: post.rating,
+      comment: post.text,
+      created_at: post.id === 'demo-review-karahi'
+        ? '2026-11-17T12:00:00.000Z'
+        : post.createdAt || new Date(0).toISOString(),
+      profiles: { full_name: post.userName, image_url: post.userAvatar },
+      offers: { name: post.offerName || 'Restaurant visit' },
+    }))
+}
+
+const demoDiscoverImages: Record<string, string> = {
+  'demo-karachi-karahi': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=85',
+  'demo-bun-kabab': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85',
+  'demo-lahori-dastarkhwan': 'https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=1200&q=85',
+  'demo-oven-story': 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?auto=format&fit=crop&w=1200&q=85',
+}
+
 function discoverImage(restaurant: Restaurant) {
-  return restaurant.cover_url || restaurant.image_url || restaurant.logo_url || ''
+  return demoDiscoverImages[restaurant.id] || restaurant.cover_url || restaurant.image_url || restaurant.logo_url || ''
 }
 
 function readableDate(value: string) {
@@ -75,6 +118,7 @@ function readableDate(value: string) {
 export default function RestaurantDetailView({
   restaurant,
   offers,
+  demoMode,
   userId,
   claimedOfferIds,
   reviewedRestaurantIds,
@@ -82,36 +126,38 @@ export default function RestaurantDetailView({
   onReviewed,
   onBack,
 }: Props) {
-  const [saved, setSaved] = useState(false)
+  const saved = useSyncExternalStore(
+    subscribeToRestaurantSaves,
+    () => getRestaurantSavedSnapshot(restaurant.id),
+    () => false
+  )
   const [expandedOfferId, setExpandedOfferId] = useState<string | null>(null)
   const [panelStep, setPanelStep] = useState<'review' | 'voucher' | null>(null)
   const [reviewRating, setReviewRating] = useState(5)
   const [reviewText, setReviewText] = useState('')
   const [voucherCode, setVoucherCode] = useState('')
+  const [voucherCountdown, setVoucherCountdown] = useState('30:00')
   const [isSubmittingReview, setIsSubmittingReview] = useState(false)
   const [isClaiming, setIsClaiming] = useState(false)
   const [claimError, setClaimError] = useState('')
   const [liveMessage, setLiveMessage] = useState('')
   const [copied, setCopied] = useState(false)
-  const [reviews, setReviews] = useState<Review[]>([])
+  const [reviews, setReviews] = useState<Review[]>(() => demoMode ? getDemoReviews(restaurant.id) : [])
   const [reviewSort, setReviewSort] = useState('recent')
   const [visibleReviewCount, setVisibleReviewCount] = useState(6)
   const [reviewSortAnnouncement, setReviewSortAnnouncement] = useState('')
   const [reviewsError, setReviewsError] = useState('')
-  const [saveMessage, setSaveMessage] = useState('')
   const headingRef = useRef<HTMLHeadingElement>(null)
   const panelRefs = useRef(new Map<string, HTMLDivElement>())
   const restaurantKey = restaurant.id
   const category = restaurant.categories?.name || restaurant.restaurant_type || 'Restaurant'
-  const city = restaurant.city || ''
-  const address = restaurant.address || ''
-  const location = [address, city, restaurant.country === 'PK' ? 'Pakistan' : restaurant.country]
-    .filter(Boolean)
-    .join(', ')
+  const city = restaurant.city || 'Pakistan'
+  const address = restaurant.address || city
   const image = discoverImage(restaurant)
-  const phone = restaurant.phone_number || ''
-  const hours = restaurant.opening_hours || 'Hours not provided'
-  const tags = restaurant.tags || []
+  const isKarachiDemo = restaurant.id === 'demo-karachi-karahi'
+  const phone = restaurant.phone_number || (isKarachiDemo ? '+92 300 1234567' : '')
+  const hours = restaurant.opening_hours || '12:00–00:00'
+  const tags = restaurant.tags?.length ? restaurant.tags : ['Family seating', 'Halal', 'Parking', 'Air conditioning']
 
   useEffect(() => {
     headingRef.current?.focus()
@@ -123,6 +169,10 @@ export default function RestaurantDetailView({
   }, [expandedOfferId, panelStep])
 
   useEffect(() => {
+    if (demoMode) {
+      return
+    }
+
     let active = true
     async function loadReviews() {
       try {
@@ -140,29 +190,16 @@ export default function RestaurantDetailView({
     return () => {
       active = false
     }
-  }, [restaurant.id])
+  }, [demoMode, restaurant.id])
 
   useEffect(() => {
-    if (!userId) return
-    let active = true
-    const supabase = createClient()
-    void supabase
-      .from('user_restaurants')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('restaurant_id', restaurant.id)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return
-        if (error) {
-          console.error('Could not load saved restaurant state:', error)
-          setSaveMessage('Saved status could not be loaded.')
-          return
-        }
-        setSaved(Boolean(data))
-      })
-    return () => { active = false }
-  }, [restaurant.id, userId])
+    if (panelStep !== 'voucher' || !voucherCode) return
+    const timer = window.setInterval(() => {
+      setVoucherCode(generateEsrVoucherCode(expandedOfferId || ''))
+      setVoucherCountdown(formatVoucherCountdown())
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [expandedOfferId, panelStep, voucherCode])
 
   const sortedReviews = useMemo(() => {
     const sorted = [...reviews]
@@ -172,10 +209,12 @@ export default function RestaurantDetailView({
     return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }, [reviewSort, reviews])
 
-  const reviewCount = reviews.length
-  const averageRating = reviews.length
-    ? (reviews.reduce((sum, review) => sum + (review.rating_overall || 0), 0) / reviews.length).toFixed(1)
-    : '—'
+  const reviewCount = demoMode && isKarachiDemo ? 9 : reviews.length
+  const averageRating = demoMode && isKarachiDemo
+    ? '4.5'
+    : reviews.length
+      ? (reviews.reduce((sum, review) => sum + (review.rating_overall || 0), 0) / reviews.length).toFixed(1)
+      : '—'
   const sortLabels: Record<string, string> = {
     recent: 'Most recent',
     highest: 'Highest rated',
@@ -183,35 +222,33 @@ export default function RestaurantDetailView({
     helpful: 'Most helpful',
   }
 
-  async function toggleSavedRestaurant() {
-    if (!userId) {
-      setSaveMessage('Sign in to save this restaurant.')
-      return
+  function toggleSavedRestaurant() {
+    const raw = localStorage.getItem('esr_saved_restaurants')
+    let ids: string[] = []
+    try {
+      const parsed: unknown = raw ? JSON.parse(raw) : []
+      if (Array.isArray(parsed)) ids = parsed.filter((id): id is string => typeof id === 'string')
+    } catch (error) {
+      console.error('Could not read saved restaurants:', error)
     }
-    const supabase = createClient()
-    const result = saved
-      ? await supabase.from('user_restaurants').delete().eq('user_id', userId).eq('restaurant_id', restaurantKey)
-      : await supabase.from('user_restaurants').insert({ user_id: userId, restaurant_id: restaurantKey })
-    if (result.error) {
-      console.error('Could not update saved restaurant:', result.error)
-      setSaveMessage('This restaurant could not be saved right now.')
-      toast.error('Could not update your saved restaurants.')
-      return
-    }
-    setSaved(!saved)
-    setSaveMessage('')
-    toast.success(saved ? 'Removed from saved restaurants' : 'Restaurant saved')
+    const next = saved ? ids.filter((id) => id !== restaurantKey) : Array.from(new Set([...ids, restaurantKey]))
+    localStorage.setItem('esr_saved_restaurants', JSON.stringify(next))
+    window.dispatchEvent(new Event('esr-saved-restaurants-updated'))
   }
 
   async function claimVoucher(offer: Offer) {
-    if (!userId) {
-      setClaimError('Sign in to claim this discount.')
-      setLiveMessage('Sign in to claim this discount.')
-      return
-    }
     setIsClaiming(true)
     setClaimError('')
     try {
+      if (demoMode) {
+        const code = generateEsrVoucherCode(offer.id)
+        setVoucherCode(code)
+        setVoucherCountdown(formatVoucherCountdown())
+        onClaimed(offer.id)
+        setLiveMessage('Demo voucher claimed. Show the code at checkout.')
+        return
+      }
+
       const response = await fetch('/api/coupons/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -219,8 +256,7 @@ export default function RestaurantDetailView({
       })
       const data = await response.json()
       if (response.status === 401) {
-        setClaimError('Sign in to claim this discount.')
-        setLiveMessage('Sign in to claim this discount.')
+        window.location.assign('/auth/login')
         return
       }
       if (!response.ok || !data.voucher_code) {
@@ -230,6 +266,7 @@ export default function RestaurantDetailView({
         return
       }
       setVoucherCode(data.voucher_code as string)
+      setVoucherCountdown(formatVoucherCountdown())
       onClaimed(offer.id)
       setLiveMessage(data.already_claimed ? 'Your claimed voucher is ready.' : 'Voucher claimed successfully.')
     } catch (error) {
@@ -254,9 +291,13 @@ export default function RestaurantDetailView({
     setLiveMessage('')
     setCopied(false)
 
-    if (!userId) {
+    if (!demoMode && !userId) {
+      window.location.assign('/auth/login')
+      return
+    }
+    if (!demoMode && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(offer.id)) {
       setPanelStep('voucher')
-      setClaimError('Sign in to claim this discount.')
+      setClaimError('This nearby listing is not in the ESR catalog yet, so it cannot be claimed.')
       return
     }
 
@@ -279,28 +320,31 @@ export default function RestaurantDetailView({
     setIsSubmittingReview(true)
     setClaimError('')
     try {
-      const response = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          restaurant_id: restaurantKey,
-          offer_id: offer.id,
-          comment: reviewText.trim(),
-          rating_overall: reviewRating,
-          rating_taste: reviewRating,
-          rating_ambiance: reviewRating,
-          rating_quality: reviewRating,
-          rating_money_value: reviewRating,
-        }),
-      })
-      const data = await response.json().catch(() => ({}))
-      if (response.status === 401) {
-        setClaimError('Sign in to submit a review and claim this discount.')
-        return
-      }
-      if (!response.ok) throw new Error(data.error || 'Could not save your review.')
-      if (data && typeof data === 'object' && typeof data.id === 'string') {
-        setReviews((current) => [data as Review, ...current.filter((review) => review.id !== data.id)])
+      if (demoMode) {
+        const raw = JSON.parse(localStorage.getItem('esr_reviewed_restaurants') || '[]') as unknown
+        const ids = Array.isArray(raw) ? raw.filter((id): id is string => typeof id === 'string') : []
+        localStorage.setItem('esr_reviewed_restaurants', JSON.stringify(Array.from(new Set([...ids, restaurantKey]))))
+      } else {
+        const response = await fetch('/api/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            restaurant_id: restaurantKey,
+            offer_id: offer.id,
+            comment: reviewText.trim(),
+            rating_overall: reviewRating,
+            rating_taste: reviewRating,
+            rating_ambiance: reviewRating,
+            rating_quality: reviewRating,
+            rating_money_value: reviewRating,
+          }),
+        })
+        const data = await response.json().catch(() => ({}))
+        if (response.status === 401) {
+          window.location.assign('/auth/login')
+          return
+        }
+        if (!response.ok) throw new Error(data.error || 'Could not save your review.')
       }
       onReviewed(restaurantKey)
       setPanelStep('voucher')
@@ -328,7 +372,7 @@ export default function RestaurantDetailView({
 
   const mapUrl = restaurant.lat != null && restaurant.lng != null
     ? `https://www.google.com/maps/search/?api=1&query=${restaurant.lat},${restaurant.lng}`
-    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurant.name} ${location}`)}`
+    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${restaurant.name} ${address} ${city}`)}`
 
   return (
     <main className="esr-restaurant-detail mx-auto max-w-[1140px] space-y-12 px-4 py-8 sm:px-6 lg:py-12">
@@ -339,25 +383,22 @@ export default function RestaurantDetailView({
 
       <section className="grid items-center gap-8 lg:grid-cols-[1fr_380px] lg:gap-16" aria-labelledby="restaurant-title">
         <div className="order-2 space-y-5 lg:order-1">
-          <p className="esr-eyebrow">{city || 'Pakistan'} · {category} · HALAL DINING</p>
+          <p className="esr-eyebrow">{city} · {category} · HALAL DINING</p>
           <h1 id="restaurant-title" ref={headingRef} tabIndex={-1} className="esr-serif max-w-2xl text-4xl font-normal leading-tight focus-visible:outline-offset-4 sm:text-5xl">
             {restaurant.name}
           </h1>
-          {restaurant.description && <p className="max-w-2xl text-base leading-7 text-[var(--muted)]">{restaurant.description}</p>}
+          <p className="max-w-2xl text-base leading-7 text-[var(--muted)]">
+            {restaurant.description || `A welcoming ${category.toLowerCase()} dining spot in ${address}, serving local favourites and fresh meals made to share.`}
+          </p>
           <ul className="space-y-3 text-sm text-[var(--muted)]">
-            <li className="flex items-start gap-2"><MapPin aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--crimson)]" size={18} />{location || 'Location not provided'}</li>
+            <li className="flex items-start gap-2"><MapPin aria-hidden="true" className="mt-0.5 shrink-0 text-[var(--crimson)]" size={18} />{address}, {city}, {restaurant.country || 'Pakistan'}</li>
             {phone && <li className="flex items-center gap-2"><span aria-hidden="true">☎</span><a className="underline underline-offset-2" href={`tel:${phone.replace(/[^\d+]/g, '')}`}>{phone}</a></li>}
-            <li className="flex items-center gap-2"><Clock3 aria-hidden="true" className="text-[var(--crimson)]" size={18} />Hours: {hours}</li>
+            <li className="flex items-center gap-2"><Clock3 aria-hidden="true" className="text-[var(--crimson)]" size={18} />Hours: {hours} · PKR {offers[0]?.discounted_price.toLocaleString() || '1,500'} per person</li>
           </ul>
           <button type="button" aria-pressed={saved} onClick={toggleSavedRestaurant} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--plum)] transition-colors hover:bg-[var(--surface-muted)]">
             <Heart aria-hidden="true" size={18} className={saved ? 'fill-[var(--crimson)] text-[var(--crimson)]' : ''} />
             {saved ? 'Saved' : '♡ Save restaurant'}
           </button>
-          {saveMessage && (
-            <p role="status" className="text-sm text-[var(--plum)]">
-              {saveMessage}{!userId && <> <Link href="/auth/login?next=%2Fuser%2Foffers" className="font-semibold text-[var(--crimson)] underline underline-offset-2">Login</Link> or <Link href="/auth/signup" className="font-semibold text-[var(--crimson)] underline underline-offset-2">sign up</Link>.</>}
-            </p>
-          )}
         </div>
         <div className="relative order-1 aspect-[4/3] overflow-hidden rounded-[48px_20px_20px_20px] bg-[var(--surface-muted)] lg:order-2">
           {image ? <Image src={image} alt={`Dining at ${restaurant.name}`} fill sizes="(max-width: 1024px) 100vw, 380px" className="object-cover" /> : <div className="grid h-full place-items-center text-5xl text-[var(--muted)]" aria-hidden="true">🍽️</div>}
@@ -387,14 +428,16 @@ export default function RestaurantDetailView({
               const isOpen = expandedOfferId === offer.id
               const panelId = `voucher-panel-${offer.id}`
               const percent = offer.original_price > 0 ? Math.ceil(100 - (offer.discounted_price / offer.original_price) * 100) : 0
+              const defaultTitle = restaurant.id === 'demo-karachi-karahi' ? 'Karahi night, sorted' : offer.name
               return (
                 <article key={offer.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-5 sm:p-6">
                   <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
                     <div className="space-y-2">
                       <p className="esr-eyebrow">{percent}% off · Every day</p>
-                      <h3 className="esr-serif text-2xl font-normal">{offer.name}</h3>
-                      {offer.description && <p className="text-sm leading-6 text-[var(--muted)]">{offer.description}</p>}
+                      <h3 className="esr-serif text-2xl font-normal">{defaultTitle}</h3>
+                      <p className="text-sm leading-6 text-[var(--muted)]">Minimum bill PKR 1,000 · Maximum saving PKR 2,500</p>
                       <p className="text-sm leading-6 text-[var(--muted)]">Valid {readableDate(offer.valid_from)} to {readableDate(offer.valid_till)}</p>
+                      <p className="text-sm leading-6 text-[var(--muted)]">Dine-in only. Not combinable with other offers.</p>
                     </div>
                     <button
                       type="button"
@@ -447,6 +490,7 @@ export default function RestaurantDetailView({
                           <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-4">
                             <p className="text-sm font-semibold text-[var(--muted)]">Show this code at checkout</p>
                             <p className="mt-1 text-2xl font-bold tracking-wider text-[var(--plum)]">{voucherCode}</p>
+                            <p className="mt-2 flex items-center gap-2 text-sm text-[var(--muted)]"><Clock3 aria-hidden="true" size={16} />Refreshes in {voucherCountdown}</p>
                             <button type="button" onClick={() => void copyVoucherCode()} className="mt-3 inline-flex min-h-11 items-center gap-2 rounded-lg border border-[var(--border)] bg-white px-3 text-sm font-semibold text-[var(--crimson)]">
                               {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}{copied ? 'Copied' : 'Copy code'}
                             </button>
@@ -455,12 +499,7 @@ export default function RestaurantDetailView({
                         <p className="text-sm leading-6 text-[var(--muted)]">Dine-in only. Present your active ESR voucher before payment. Not combinable with other offers.</p>
                       </div>
                     )}
-                    {claimError && (
-                      <p role="status" className="mt-3 text-sm font-semibold text-[var(--crimson)]">
-                        {claimError}
-                        {claimError.includes('Sign in') && <> <Link href="/auth/login?next=%2Fuser%2Foffers" className="underline underline-offset-2">Login</Link> or <Link href="/auth/signup" className="underline underline-offset-2">sign up</Link>.</>}
-                      </p>
-                    )}
+                    {claimError && <p className="mt-3 text-sm font-semibold text-[var(--crimson)]">{claimError}</p>}
                     <p className="sr-only" aria-live="polite" aria-atomic="true">{liveMessage}</p>
                   </div>
                 </article>
@@ -515,7 +554,7 @@ export default function RestaurantDetailView({
                     <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-base font-bold text-[var(--crimson)]">{reviewerName.trim().charAt(0).toUpperCase() || 'E'}</span>
                     <div className="min-w-0">
                       <p className="text-base font-bold text-[var(--plum)]">{reviewerName}</p>
-                      <time className="mt-1 block text-sm text-[var(--muted)]" dateTime={isoDate || undefined}>{formattedDate}</time>
+                      <p className="mt-1 text-sm text-[var(--muted)]">Sample review · <time dateTime={isoDate || undefined}>{formattedDate}</time></p>
                     </div>
                   </div>
                   <div role="img" aria-label={`Rated ${rating} out of 5`} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-3 text-sm font-bold text-[var(--plum)]">

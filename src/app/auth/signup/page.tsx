@@ -7,7 +7,6 @@ import AuthPageShell from '@/components/auth/AuthPageShell'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { ButtonLoader } from '@/components/ui/loader'
-import { authCallbackUrl, friendlyAuthError } from '@/lib/auth-routing'
 
 export default function SignupPage() {
   const [fullName, setFullName] = useState('')
@@ -39,7 +38,7 @@ export default function SignupPage() {
         password,
         options: {
           data: { full_name: fullName },
-          emailRedirectTo: authCallbackUrl(window.location.origin),
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
       if (signupError) throw signupError
@@ -50,9 +49,7 @@ export default function SignupPage() {
         toast.success('Account created — check your email')
       }
     } catch (signupError) {
-      const message = friendlyAuthError(
-        signupError instanceof Error ? signupError.message : 'Account creation failed. Please try again.'
-      )
+      const message = signupError instanceof Error ? signupError.message : 'Account creation failed. Please try again.'
       setError(message)
       setStatus(`Error: ${message}`)
       toast.error(message)
@@ -70,13 +67,11 @@ export default function SignupPage() {
       toast.message('Redirecting to Google…')
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo: authCallbackUrl(window.location.origin) },
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
       })
       if (oauthError) throw oauthError
     } catch (oauthError) {
-      const message = friendlyAuthError(
-        oauthError instanceof Error ? oauthError.message : 'Failed to sign in with Google.'
-      )
+      const message = oauthError instanceof Error ? oauthError.message : 'Failed to sign in with Google.'
       setError(message)
       setStatus(`Error: ${message}`)
       toast.error(message)
