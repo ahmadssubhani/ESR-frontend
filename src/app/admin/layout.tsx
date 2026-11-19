@@ -9,7 +9,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   const { data: profileData } = await supabase.from('profiles').select('role, full_name').eq('id', user.id).single()
   const profile = profileData as { role: string; full_name: string | null } | null
-  if (!profile || !['admin', 'restaurant'].includes(profile.role)) redirect('/user/offers')
+  if (!profile || !['admin', 'owner'].includes(profile.role)) redirect('/')
 
   return (
     <div className="min-h-screen bg-gray-50 flex">

@@ -1,13 +1,12 @@
 // app/auth/callback/route.ts
 import { createClient } from '@/lib/supabase/server'
 import { ensureUserProfile } from '@/lib/ensure-profile'
-import { roleHome, safeReturnPath } from '@/lib/auth-routing'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = safeReturnPath(searchParams.get('next'))
+  const next = searchParams.get('next') ?? '/user/offers'
   const error = searchParams.get('error')
   const error_description = searchParams.get('error_description')
 
@@ -33,17 +32,16 @@ export async function GET(request: Request) {
       }
 
       // Backfill profiles for users created before the trigger / missing a row
-      let role: string | null = null
       if (data.user) {
         try {
-          const profile = await ensureUserProfile(data.user)
-          role = profile.role
+          await ensureUserProfile(data.user)
         } catch (profileErr) {
           console.error('Profile ensure failed after auth:', profileErr)
         }
       }
 
-      return NextResponse.redirect(new URL(roleHome(role, next), origin))
+      // Successful authentication - redirect to dashboard
+      return NextResponse.redirect(`${origin}${next}`)
     } catch (err) {
       console.error('Callback error:', err)
       return NextResponse.redirect(

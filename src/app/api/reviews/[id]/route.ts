@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, getApiUser } from '@/lib/supabase/server'
+import { createClient, createAdminClient , getApiUser } from '@/lib/supabase/server'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -20,25 +20,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { data: { user } } = await getApiUser(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body: unknown = await request.json().catch(() => null)
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Invalid review details.' }, { status: 400 })
-  }
-  const values = body as Record<string, unknown>
-  const update: { comment?: string; rating_overall?: number; updated_at: string } = {
-    updated_at: new Date().toISOString(),
-  }
-  if (typeof values.comment === 'string') update.comment = values.comment.trim()
-  if (typeof values.rating_overall === 'number') update.rating_overall = values.rating_overall
-  if (!Object.keys(update).some((key) => key !== 'updated_at')) {
-    return NextResponse.json({ error: 'No review changes provided.' }, { status: 400 })
-  }
-
-  const { data, error } = await supabase
+  const body = await request.json()
+  const adminClient = await createAdminClient()
+  const { data, error } = await adminClient
     .from('reviews')
-    .update(update)
+    .update({ ...body, updated_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('user_id', user.id)
     .select()
     .single()
 
@@ -52,7 +39,8 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await getApiUser(supabase)
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { error } = await supabase.from('reviews').delete().eq('id', id).eq('user_id', user.id)
+  const adminClient = await createAdminClient()
+  const { error } = await adminClient.from('reviews').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ message: 'Deleted' })
 }
