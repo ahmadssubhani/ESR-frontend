@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Trash2 } from 'lucide-react'
 import {
   isDbOfferId,
@@ -12,6 +13,7 @@ import {
 } from '@/lib/saved-offers'
 import { toast } from 'sonner'
 import { InlineLoader } from '@/components/ui/loader'
+import { getDemoRole, subscribeToDemoRole } from '@/lib/demo-session'
 
 interface WishlistItem {
   id: string
@@ -35,8 +37,14 @@ function mergeItems(dbItems: WishlistItem[], localItems: SavedOfferSnapshot[]): 
 }
 
 export default function FavouritesClient({ initialItems, demoMode = false }: { initialItems: WishlistItem[]; demoMode?: boolean }) {
+  const router = useRouter()
+  const demoRole = useSyncExternalStore(subscribeToDemoRole, getDemoRole, () => null)
   const [items, setItems] = useState<WishlistItem[]>(initialItems)
   const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    if (demoMode && !demoRole) router.replace('/auth/login?next=%2Fuser%2Ffavourites')
+  }, [demoMode, demoRole, router])
 
   useEffect(() => {
     setItems(mergeItems(initialItems, readSavedOfferSnapshots()))
@@ -55,7 +63,10 @@ export default function FavouritesClient({ initialItems, demoMode = false }: { i
     toast.success('Removed from saved')
   }
 
-  if (!ready) {
+  if ((demoMode && !demoRole) || !ready) {
+    if (demoMode && !demoRole) {
+      return <p role="status" className="py-12 text-center text-base font-medium text-[var(--plum)]">Redirecting to sign in…</p>
+    }
     return <InlineLoader label="Loading saved offers…" />
   }
 

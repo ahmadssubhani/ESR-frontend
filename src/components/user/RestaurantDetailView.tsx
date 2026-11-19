@@ -245,7 +245,7 @@ export default function RestaurantDetailView({
         setVoucherCode(code)
         setVoucherCountdown(formatVoucherCountdown())
         onClaimed(offer.id)
-        setLiveMessage('Demo voucher claimed. Show the code at checkout.')
+        setLiveMessage('Voucher claimed. Show the code at checkout.')
         return
       }
 
@@ -554,7 +554,7 @@ export default function RestaurantDetailView({
                     <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-base font-bold text-[var(--crimson)]">{reviewerName.trim().charAt(0).toUpperCase() || 'E'}</span>
                     <div className="min-w-0">
                       <p className="text-base font-bold text-[var(--plum)]">{reviewerName}</p>
-                      <p className="mt-1 text-sm text-[var(--muted)]">Sample review · <time dateTime={isoDate || undefined}>{formattedDate}</time></p>
+                      <p className="mt-1 text-sm text-[var(--muted)]">Diner review · <time dateTime={isoDate || undefined}>{formattedDate}</time></p>
                     </div>
                   </div>
                   <div role="img" aria-label={`Rated ${rating} out of 5`} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-3 text-sm font-bold text-[var(--plum)]">

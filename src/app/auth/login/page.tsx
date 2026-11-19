@@ -24,7 +24,7 @@ function LoginForm() {
 
   function enterDemo(role: DemoRole) {
     startDemoSession(role)
-    toast.success(`${role} demo opened. No sign-in or database needed.`)
+    toast.success(`${role} workspace opened.`)
     router.push(role === 'Diner' ? '/user/offers' : '/demo/workspace')
   }
 
@@ -119,11 +119,6 @@ function LoginForm() {
       size="wide"
     >
         <section aria-label="Sign in to ESR" className="esr-card space-y-6 p-6 sm:p-8">
-          {demoMode && (
-            <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-center text-sm font-medium text-[var(--plum)]">
-              Interactive demo · email delivery and Google sign-in are simulated.
-            </p>
-          )}
           <form onSubmit={passwordMode ? handleLogin : handleEmailLink} className="space-y-4">
             {error && (
               <p id="auth-error" role="alert" className="flex items-start gap-2 rounded-xl border border-[var(--crimson)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-medium text-[var(--plum)]">
@@ -216,12 +211,12 @@ function LoginForm() {
 
           {demoMode && (
             <div className="space-y-3">
-              <p className="text-center text-sm font-semibold text-[var(--muted)]">Or explore a sample account</p>
+              <p className="text-center text-sm font-semibold text-[var(--muted)]">Choose an account type</p>
               <div className="grid grid-cols-1 gap-2 min-[520px]:grid-cols-3">
                 {([
-                  ['Diner', 'Diner preview ↗'],
-                  ['Admin', 'Admin preview ↗'],
-                  ['Restaurant', 'Restaurant preview ↗'],
+                  ['Diner', 'Diner ↗'],
+                  ['Admin', 'Admin ↗'],
+                  ['Restaurant', 'Restaurant ↗'],
                 ] as const).map(([role, label]) => (
                   <button
                     key={role}

@@ -5,8 +5,9 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Bell, Menu, MessageSquare, Tag, User, X } from 'lucide-react'
+import { Bell, Menu, MessageSquare, Tag, X } from 'lucide-react'
 import { getDemoRole, subscribeToDemoRole } from '@/lib/demo-session'
+import { DEMO_USER } from '@/lib/demo-data'
 
 interface Props {
   profile: {
@@ -44,17 +45,18 @@ export default function UserNav({ profile }: Props) {
   const demoRole = useSyncExternalStore(subscribeToDemoRole, getDemoRole, () => null)
   const isSignedIn = Boolean(profile) || Boolean(demoRole)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-  const [userName, setUserName] = useState(profile?.full_name || 'Diner')
+  const [userName, setUserName] = useState(profile?.full_name || (demoRole ? DEMO_USER.name : 'Diner'))
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState(initialNotifications)
   const unreadCount = notifications.filter((notification) => !notification.read).length
+  const firstName = userName.trim().split(/\s+/)[0] || 'Account'
 
   useEffect(() => {
     const updateUserData = () => {
       const localAvatar = localStorage.getItem('user_avatar')
       const localName = localStorage.getItem('user_name')
-      setAvatarUrl(localAvatar || profile?.image_url || profile?.avatar_url || null)
-      setUserName(localName || profile?.full_name || 'Account')
+      setAvatarUrl(localAvatar || profile?.image_url || profile?.avatar_url || (demoRole === 'Diner' ? DEMO_USER.avatar : null))
+      setUserName(localName || profile?.full_name || (demoRole ? DEMO_USER.name : 'Account'))
     }
 
     updateUserData()
@@ -65,7 +67,7 @@ export default function UserNav({ profile }: Props) {
       window.removeEventListener('user-avatar-changed', updateUserData)
       window.removeEventListener('storage', updateUserData)
     }
-  }, [profile])
+  }, [profile, demoRole])
 
   const isDiscover = pathname === '/user/offers'
   const isFeed = pathname.startsWith('/user/foodies-feed')
@@ -108,7 +110,7 @@ export default function UserNav({ profile }: Props) {
           </div>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            <Dialog.Root>
+            {isSignedIn && <Dialog.Root>
               <Dialog.Trigger asChild>
                 <button
                   type="button"
@@ -161,7 +163,7 @@ export default function UserNav({ profile }: Props) {
                               <p className="mt-1 text-sm text-[var(--muted)]">{notification.message}</p>
                             )}
                             <span className="mt-2 inline-block rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
-                              Sample notification
+                              ESR update
                             </span>
                             {!notification.read && <span className="sr-only">Unread</span>}
                           </div>
@@ -187,41 +189,45 @@ export default function UserNav({ profile }: Props) {
                   </ul>
                 </Dialog.Content>
               </Dialog.Portal>
-            </Dialog.Root>
+            </Dialog.Root>}
 
             {isSignedIn ? (
+              <Link
+                href="/user/profile"
+                aria-label={`Account: ${userName}`}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[var(--crimson)] px-3 text-sm font-bold text-white hover:bg-[var(--crimson-hover)]"
+              >
+                <span className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/20">
+                  {avatarUrl ? (
+                    <Image
+                      src={avatarUrl}
+                      alt=""
+                      fill
+                      sizes="28px"
+                      unoptimized={avatarUrl.startsWith('data:') || avatarUrl.includes('supabase.co')}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <span aria-hidden="true">{firstName.charAt(0).toUpperCase()}</span>
+                  )}
+                </span>
+                <span className="hidden max-w-36 truncate sm:inline">{firstName}</span>
+              </Link>
+            ) : (
               <>
                 <Link
-                  href="/user/profile"
-                  aria-label={`Account: ${userName}`}
-                  className="inline-flex min-h-11 items-center gap-2 rounded-full bg-[var(--crimson)] px-3 text-sm font-bold text-white hover:bg-[var(--crimson-hover)]"
+                  href="/auth/login"
+                  className="esr-outline-button hidden min-h-11 items-center rounded-full px-4 text-sm font-semibold md:inline-flex"
                 >
-                  <span className="relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/20">
-                    {avatarUrl ? (
-                      <Image
-                        src={avatarUrl}
-                        alt=""
-                        fill
-                        sizes="28px"
-                        unoptimized={avatarUrl.startsWith('data:') || avatarUrl.includes('supabase.co')}
-                        className="object-cover"
-                      />
-                    ) : (
-                      <User aria-hidden="true" size={16} />
-                    )}
-                  </span>
-                  <span className="hidden max-w-36 truncate sm:inline">{userName}</span>
+                  Login
+                </Link>
+                <Link
+                  href="/auth/signup"
+                  className="esr-primary-button hidden min-h-11 items-center rounded-full px-4 text-sm font-semibold md:inline-flex"
+                >
+                  Sign up
                 </Link>
               </>
-            ) : (
-              <Link
-                href="/auth/login"
-                aria-label="Login / Account"
-                className="inline-flex min-h-11 items-center rounded-full bg-[var(--crimson)] px-4 text-sm font-bold text-white hover:bg-[var(--crimson-hover)]"
-              >
-                <span className="hidden sm:inline">Login / Account</span>
-                <span className="sm:hidden">Login</span>
-              </Link>
             )}
 
             <button
@@ -259,6 +265,24 @@ export default function UserNav({ profile }: Props) {
               >
                 <MessageSquare aria-hidden="true" size={18} /> Foodie Feed
               </Link>
+              {!isSignedIn && (
+                <>
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="flex min-h-11 items-center rounded-xl border border-[var(--border)] px-3 font-semibold text-[var(--plum)] hover:bg-white"
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="esr-primary-button flex min-h-11 items-center justify-center rounded-xl px-3 font-semibold"
+                  >
+                    Sign up
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
         )}

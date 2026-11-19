@@ -571,7 +571,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Restaurant, cuisine or area — e.g. Gulberg"
+              placeholder="Restaurant, cuisine or area"
               className="min-h-14 w-full border-0 bg-transparent px-4 py-3 text-base font-normal text-[var(--foreground)] placeholder:text-[var(--muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--crimson)]"
             />
           </div>

@@ -6,13 +6,9 @@ import Link from 'next/link'
 import { ArrowRight, PenLine } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  groupStories,
-  mapDbStory,
   mapReviewToFeedPost,
   type DbReview,
-  type DbStory,
 } from '@/lib/foodie-feed'
-import FeedStories from '@/components/user/feed/FeedStories'
 import FeedPostCard from '@/components/user/feed/FeedPostCard'
 import ReviewComposer from '@/components/user/feed/ReviewComposer'
 import type { FeedDiscount, FeedPost, FeedRestaurant, FeedStory, FeedUser } from '@/components/user/feed/types'
@@ -44,14 +40,12 @@ function getServerRecentRestaurantSnapshot() {
 }
 
 export default function FoodieFeedClient({
-  initialStories,
   initialPosts,
   currentUser,
   restaurants,
   latestDiscounts,
   demoMode = false,
 }: Props) {
-  const [stories, setStories] = useState(initialStories)
   const [posts, setPosts] = useState(initialPosts)
   const [composerOpen, setComposerOpen] = useState(false)
   const recentSnapshot = useSyncExternalStore(
@@ -59,10 +53,6 @@ export default function FoodieFeedClient({
     getRecentRestaurantSnapshot,
     getServerRecentRestaurantSnapshot
   )
-
-  useEffect(() => {
-    setStories(initialStories)
-  }, [initialStories])
 
   useEffect(() => {
     setPosts(initialPosts)
@@ -133,20 +123,6 @@ export default function FoodieFeedClient({
           prev.map((post) => (post.id === row.review_id ? { ...post, commentCount: post.commentCount + 1 } : post))
         )
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'feed_stories' }, async (payload) => {
-        const id = (payload.new as { id?: string }).id
-        if (!id) return
-        const { data } = await supabase
-          .from('feed_stories')
-          .select(
-            'id, user_id, media_url, media_type, caption, source, external_url, embed_url, created_at, profiles(full_name, image_url)'
-          )
-          .eq('id', id)
-          .maybeSingle()
-        if (!data) return
-        const mapped = mapDbStory(data as DbStory)
-        setStories((prev) => (prev.some((story) => story.id === mapped.id) ? prev : [mapped, ...prev]))
-      })
       .subscribe()
 
     return () => {
@@ -154,28 +130,27 @@ export default function FoodieFeedClient({
     }
   }, [currentUser.id, demoMode])
 
-  const groups = useMemo(() => groupStories(stories), [stories])
   const recentlyViewed = recentRestaurantIds
     .map((id) => restaurants.find((restaurant) => restaurant.id === id))
     .filter((restaurant): restaurant is FeedRestaurant => Boolean(restaurant))
+    .slice(0, 3)
+  const recentlyViewedSet = new Set(recentlyViewed.map((restaurant) => restaurant.id))
+  const suggestedRestaurants = restaurants
+    .filter((restaurant) => !recentlyViewedSet.has(restaurant.id))
+    .slice(0, Math.max(0, 3 - recentlyViewed.length))
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <header className="pb-1">
         <p className="esr-eyebrow">Good food, shared honestly</p>
         <h1 className="mt-2 text-4xl font-bold sm:text-5xl">Foodie Feed</h1>
-        {demoMode && (
-          <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-[var(--plum)]">
-            Interactive demo · posts, likes, comments, and stories are previewed locally.
-          </p>
-        )}
       </header>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(190px,0.8fr)_minmax(0,1.7fr)_minmax(220px,0.95fr)]">
         <aside aria-label="Recently viewed restaurants" className="order-2 space-y-4 lg:order-1">
           <section className="esr-card p-5">
             <h2 className="esr-serif text-xl font-bold">Recently viewed</h2>
-            {recentlyViewed.length === 0 ? (
+            {recentlyViewed.length === 0 && suggestedRestaurants.length === 0 ? (
               <p className="mt-3 text-sm leading-6 text-[var(--muted)]">
                 Restaurants you open will appear here.
               </p>
@@ -183,14 +158,35 @@ export default function FoodieFeedClient({
               <ul className="mt-4 space-y-3">
                 {recentlyViewed.map((restaurant) => (
                   <li key={restaurant.id}>
-                    <Link href="/user/offers" className="flex min-h-11 items-center gap-3 text-sm font-bold text-[var(--plum)] hover:text-[var(--crimson)]">
+                    <Link href={`/user/offers#restaurant/${encodeURIComponent(restaurant.id)}`} className="flex min-h-12 items-center gap-3 rounded-lg text-sm font-bold text-[var(--plum)] hover:text-[var(--crimson)]">
                       <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-[var(--surface-muted)]">
                         {restaurant.image && <Image src={restaurant.image} alt="" fill sizes="44px" className="object-cover" />}
                       </span>
-                      {restaurant.name}
+                      <span className="min-w-0">
+                        <span className="block truncate">{restaurant.name}</span>
+                        <span className="block truncate text-sm font-medium text-[var(--muted)]">{restaurant.area || restaurant.city || 'Pakistan'}</span>
+                      </span>
                     </Link>
                   </li>
                 ))}
+                {suggestedRestaurants.length > 0 && (
+                  <>
+                    <li className="pt-1 text-sm font-medium text-[var(--muted)]">Suggested for you</li>
+                    {suggestedRestaurants.map((restaurant) => (
+                      <li key={restaurant.id}>
+                        <Link href={`/user/offers#restaurant/${encodeURIComponent(restaurant.id)}`} className="flex min-h-12 items-center gap-3 rounded-lg text-sm font-bold text-[var(--plum)] hover:text-[var(--crimson)]">
+                          <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-[var(--surface-muted)]">
+                            {restaurant.image && <Image src={restaurant.image} alt="" fill sizes="44px" className="object-cover" />}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate">{restaurant.name}</span>
+                            <span className="block truncate text-sm font-medium text-[var(--muted)]">{restaurant.area || restaurant.city || 'Pakistan'}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    ))}
+                  </>
+                )}
               </ul>
             )}
             <Link href="/user/offers" className="mt-4 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[var(--crimson)] hover:underline">
@@ -200,15 +196,6 @@ export default function FoodieFeedClient({
         </aside>
 
         <div className="order-1 min-w-0 space-y-6 lg:order-2">
-          <FeedStories
-            groups={groups}
-            currentUser={currentUser}
-            demoMode={demoMode}
-            onStoryPosted={(story) =>
-              setStories((prev) => (prev.some((item) => item.id === story.id) ? prev : [story, ...prev]))
-            }
-          />
-
           <section aria-labelledby="latest-feed-heading" className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
               <h2 id="latest-feed-heading" className="esr-eyebrow">Latest from the community</h2>
@@ -252,20 +239,20 @@ export default function FoodieFeedClient({
 
         <aside aria-label="Restaurant recommendations and discounts" className="order-3 space-y-4">
           <section className="esr-card p-5">
-            <h2 className="esr-serif text-xl font-bold">Worth exploring</h2>
+            <h2 className="esr-serif text-xl font-bold">For you</h2>
             {restaurants.length === 0 ? (
               <p className="mt-3 text-sm text-[var(--muted)]">Restaurants will appear here soon.</p>
             ) : (
               <ul className="mt-4 space-y-3">
                 {restaurants.slice(0, 3).map((restaurant) => (
                   <li key={restaurant.id}>
-                    <Link href="/user/offers" className="flex min-h-12 items-center gap-3 rounded-lg text-sm text-[var(--plum)] hover:text-[var(--crimson)]">
+                    <Link href={`/user/offers#restaurant/${encodeURIComponent(restaurant.id)}`} className="flex min-h-12 items-center gap-3 rounded-lg text-sm text-[var(--plum)] hover:text-[var(--crimson)]">
                       <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-[var(--surface-muted)]">
                         {restaurant.image && <Image src={restaurant.image} alt="" fill sizes="48px" className="object-cover" />}
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate font-bold">{restaurant.name}</span>
-                        <span className="block truncate text-sm text-[var(--muted)]">{restaurant.city || 'Pakistan'}</span>
+                        <span className="block truncate text-sm text-[var(--muted)]">{restaurant.area || restaurant.city || 'Pakistan'}</span>
                       </span>
                     </Link>
                   </li>
@@ -329,4 +316,4 @@ export default function FoodieFeedClient({
   )
 }
 
-export type { FeedPost, FeedStory }
+export type { FeedPost }

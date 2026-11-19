@@ -59,6 +59,7 @@ export type FeedRestaurant = {
   id: string
   name: string
   city?: string | null
+  area?: string | null
   image?: string | null
 }
 

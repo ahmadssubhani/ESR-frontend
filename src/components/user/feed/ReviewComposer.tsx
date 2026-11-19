@@ -72,7 +72,7 @@ export default function ReviewComposer({ restaurants, currentUser, onClose, onPo
           commentCount: 0,
         }
         onPosted(post)
-        toast.success('Demo review added to the feed')
+        toast.success('Review added to the feed')
         return
       }
 

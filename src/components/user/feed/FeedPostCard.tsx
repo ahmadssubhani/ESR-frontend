@@ -121,7 +121,7 @@ export default function FeedPostCard({ post, currentUser, onPostChange, demoMode
       setComments((prev) => [...prev, comment])
       setDraft('')
       onPostChange({ ...post, commentCount: post.commentCount + 1 })
-      toast.success('Demo comment added')
+      toast.success('Comment added')
       return
     }
     setSending(true)
@@ -148,14 +148,14 @@ export default function FeedPostCard({ post, currentUser, onPostChange, demoMode
     <article className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-sm">
       <div className="flex items-center justify-between p-4 pb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <div className="relative w-10 h-10 rounded-full overflow-hidden bg-red-100 shrink-0">
-            <Image src={post.userAvatar} alt={post.userName} fill className="object-cover" />
+          <div aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-base font-semibold text-[var(--crimson)]">
+            {post.userName.trim().charAt(0).toUpperCase() || 'F'}
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="truncate text-base font-bold text-[var(--plum)]">{post.userName}</p>
               {post.verified && (
-                <BadgeCheck size={14} className="text-red-600 shrink-0" aria-label="Verified review" />
+                <BadgeCheck size={14} className="shrink-0 text-[var(--crimson)]" aria-label="Verified review" />
               )}
             </div>
             <p className="flex items-center gap-1 truncate text-sm text-[var(--muted)]">
@@ -176,13 +176,13 @@ export default function FeedPostCard({ post, currentUser, onPostChange, demoMode
       </div>
 
       {post.image && (
-        <div className="relative aspect-[16/10] max-h-[28rem] overflow-hidden bg-gray-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+        <div className="relative aspect-[16/10] max-h-[28rem] overflow-hidden bg-[var(--surface-muted)]">
+          <Image
             src={post.image}
             alt={`Meal shared at ${post.restaurantName}`}
+            fill
+            sizes="(max-width: 768px) 100vw, 600px"
             className="h-full w-full object-cover"
-            loading="lazy"
           />
           <span
             role="img"

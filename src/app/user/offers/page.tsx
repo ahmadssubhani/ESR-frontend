@@ -6,7 +6,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 
 export const metadata: Metadata = {
   title: 'Discover restaurants | ESR',
-  description: 'Explore sample restaurants and dining offers across Pakistan.',
+  description: 'Explore restaurants and dining offers across Pakistan.',
 }
 
 export default async function OffersPage() {

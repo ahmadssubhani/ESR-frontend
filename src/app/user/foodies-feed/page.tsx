@@ -13,7 +13,7 @@ import type { FeedStory } from '@/components/user/feed/types'
 
 export const metadata: Metadata = {
   title: 'Foodie Feed | ESR',
-  description: 'Read sample restaurant reviews from food lovers around Pakistan.',
+  description: 'Read diner reviews from food lovers around Pakistan.',
 }
 
 export default async function FoodieFeedPage() {

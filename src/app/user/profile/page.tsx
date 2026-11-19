@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import ProfileClient from '@/components/user/ProfileClient'
 import { DEMO_USER } from '@/lib/demo-data'
 
@@ -11,8 +12,8 @@ export default async function ProfilePage() {
           id: DEMO_USER.id,
           full_name: DEMO_USER.name,
           email: 'ayesha@example.com',
+          role: 'customer',
           image_url: DEMO_USER.avatar,
-          avatar_url: DEMO_USER.avatar,
         }}
         reviews={[]}
         redemptions={[]}
@@ -23,11 +24,7 @@ export default async function ProfilePage() {
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return (
-      <ProfileClient profile={null} reviews={[]} redemptions={[]} demoMode />
-    )
-  }
+  if (!user) redirect('/auth/login?next=%2Fuser%2Fprofile')
 
   const [{ data: profile }, { data: reviews }, { data: redemptions }] = await Promise.all([
     supabase.from('profiles').select('*').eq('id', user.id).single(),
@@ -41,8 +38,8 @@ export default async function ProfilePage() {
         full_name: profile.full_name ?? undefined,
         phone: profile.phone ?? undefined,
         email: user?.email ?? undefined,
+        role: profile.role,
         image_url: profile.image_url ?? undefined,
-        avatar_url: profile.image_url ?? undefined,
       }
     : null
 

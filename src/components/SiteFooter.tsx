@@ -31,7 +31,7 @@ export default function SiteFooter() {
               </span>
             </Link>
             <p className="mt-4 text-sm leading-relaxed max-w-sm">
-              Discover exclusive restaurant deals near you. Browse offers, redeem coupons, and eat better for less.
+              Pakistani dining, better together
             </p>
           </div>
 

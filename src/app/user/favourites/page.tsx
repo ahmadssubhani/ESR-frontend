@@ -1,4 +1,5 @@
 import FavouritesClient from '@/components/user/FavouritesClient'
+import { redirect } from 'next/navigation'
 
 export default function FavouritesPage() {
   const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false'
@@ -10,7 +11,7 @@ async function FavouritesPageLive() {
   const { createClient } = await import('@/lib/supabase/server')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return <FavouritesClient initialItems={[]} demoMode />
+  if (!user) redirect('/auth/login?next=%2Fuser%2Ffavourites')
   const { data } = await supabase
     .from('user_offers')
     .select(`*, offers(*, restaurants(id, name, cover_url, logo_url, categories(name)))`)

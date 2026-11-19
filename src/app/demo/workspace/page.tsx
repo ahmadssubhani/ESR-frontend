@@ -35,7 +35,7 @@ export default function DemoWorkspacePage() {
             </span>
             <div>
               <p className="esr-serif font-bold">ESR workspace</p>
-              <p className="text-sm text-[var(--muted)]">{role} preview</p>
+              <p className="text-sm text-[var(--muted)]">{role} workspace</p>
             </div>
           </div>
           <nav aria-label="Workspace sections" className="space-y-1">
@@ -56,7 +56,7 @@ export default function DemoWorkspacePage() {
             ))}
           </nav>
           <div className="mt-5 border-t border-[var(--border)] pt-4">
-            <p className="px-2 text-sm font-semibold text-[var(--muted)]">Switch preview</p>
+            <p className="px-2 text-sm font-semibold text-[var(--muted)]">Switch workspace role</p>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {(['Admin', 'Restaurant'] as const).map((nextRole) => (
                 <button
@@ -80,10 +80,10 @@ export default function DemoWorkspacePage() {
         <div className="min-w-0 space-y-6">
           <header className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="esr-eyebrow">Interactive workspace preview</p>
+              <p className="esr-eyebrow">Workspace overview</p>
               <h1 className="mt-2 text-4xl font-bold">{selectedSection}</h1>
               <p className="mt-2 text-base text-[var(--muted)]">
-                Sample {isRestaurant ? 'restaurant' : 'business'} data for exploring ESR.
+                Example {isRestaurant ? 'restaurant' : 'business'} information from ESR.
               </p>
             </div>
             <Link href="/user/offers" className="esr-primary-button inline-flex min-h-11 items-center gap-2 px-4">
@@ -92,10 +92,10 @@ export default function DemoWorkspacePage() {
           </header>
 
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--plum)]">
-            Demo workspace · Sample data only. Changes here are not saved to a restaurant account.
+            Workspace information is illustrative and changes are not saved to a restaurant account.
           </div>
 
-          <section aria-label="Sample business metrics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <section aria-label="Business metrics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {demoMetrics.map(({ label, value, change, icon: Icon }) => (
               <article key={label} className="esr-card p-5">
                 <div className="flex items-center justify-between gap-2">
@@ -112,7 +112,7 @@ export default function DemoWorkspacePage() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] p-5">
               <div>
                 <h2 className="esr-serif text-xl font-bold">{isRestaurant ? 'Your latest offers' : 'Restaurant offers'}</h2>
-                <p className="mt-1 text-sm text-[var(--muted)]">A sample of the ESR dining catalog</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">Selected offers from the ESR dining catalog</p>
               </div>
               <button
                 type="button"
