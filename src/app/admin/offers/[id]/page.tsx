@@ -11,7 +11,7 @@ export default async function EditOfferPage({ params }: { params: Promise<{ id: 
 
   const [{ data: offer }, restaurantsResult] = await Promise.all([
     supabase.from('offers').select('*').eq('id', id).single(),
-    profile?.role === 'restaurant'
+    profile?.role === 'owner'
       ? supabase.from('restaurants').select('id, name').eq('owner_id', user!.id).order('name')
       : supabase.from('restaurants').select('id, name').order('name'),
   ])

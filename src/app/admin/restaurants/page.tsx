@@ -9,7 +9,7 @@ export default async function RestaurantsPage() {
   const profile = profileData as { role: string } | null
 
   let query = supabase.from('restaurants').select(`*, categories(name), reviews(rating_overall), offers(id)`)
-  if (profile?.role === 'restaurant') {
+  if (profile?.role === 'owner') {
     query = query.eq('owner_id', user!.id)
   }
   const { data: restaurants } = await query.order('created_at', { ascending: false })

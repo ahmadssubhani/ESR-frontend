@@ -10,7 +10,7 @@ export default async function AnalyticsPage() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
   let redemptionsQuery = supabase.from('user_coupons').select('used_at, offer_id, offers(name, restaurants(name))').gte('used_at', thirtyDaysAgo)
-  if (profile?.role === 'restaurant') {
+  if (profile?.role === 'owner') {
     const { data: r } = await supabase.from('restaurants').select('id').eq('owner_id', user!.id).single()
     const restaurant = r as { id: string } | null
     if (restaurant) redemptionsQuery = redemptionsQuery.eq('offers.restaurant_id', restaurant.id)

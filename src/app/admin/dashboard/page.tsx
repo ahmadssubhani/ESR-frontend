@@ -20,7 +20,7 @@ export default async function AdminDashboard() {
   const today = new Date().toISOString().split('T')[0]
 
   let restaurantId: string | null = null
-  if (profile?.role === 'restaurant') {
+  if (profile?.role === 'owner') {
     const { data: r } = await supabase.from('restaurants').select('id').eq('owner_id', user!.id).single()
     restaurantId = (r as { id: string } | null)?.id || null
   }
