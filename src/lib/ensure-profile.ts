@@ -1,9 +1,10 @@
 import type { User } from '@supabase/supabase-js'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 
 export type NavProfile = {
   full_name: string | null
   image_url: string | null
+  avatar_url: string | null
   role: string
 }
 
@@ -23,75 +24,54 @@ function profileFromUser(user: User): NavProfile {
   return {
     full_name: fullName,
     image_url: imageUrl,
-    role: 'customer',
+    avatar_url: imageUrl,
+    role: 'user',
   }
 }
 
 /**
- * Load the user's profile for the navbar. If the auth user has no profiles row
- * (common when the DB trigger was missing), create one. Always returns a
- * nav profile when `user` is present so logged-in UI is not email-dependent.
+ * Load or create the authenticated user's own profile using their RLS session.
  */
 export async function ensureUserProfile(user: User): Promise<NavProfile> {
   const supabase = await createClient()
-  const { data: existing } = await supabase
+  const { data: existing, error: loadError } = await supabase
     .from('profiles')
-    .select('full_name, image_url, role')
+    .select('full_name, image_url, avatar_url, role')
     .eq('id', user.id)
     .maybeSingle()
 
+  if (loadError) throw loadError
   if (existing) {
     return {
       full_name: existing.full_name,
       image_url: existing.image_url,
+      avatar_url: existing.avatar_url,
       role: existing.role,
     }
   }
 
   const fallback = profileFromUser(user)
-  const row = {
+  const { data: created, error } = await supabase
+    .from('profiles')
+    .upsert({
     id: user.id,
     email: user.email ?? null,
     full_name: fallback.full_name,
     phone: null,
     location: null,
     image_url: fallback.image_url,
+    avatar_url: fallback.avatar_url,
     registration_code: null,
-    role: 'customer' as const,
+    role: 'user',
+  }, { onConflict: 'id' })
+    .select('full_name, image_url, avatar_url, role')
+    .single()
+
+  if (error) throw error
+  return {
+    full_name: created.full_name,
+    image_url: created.image_url,
+    avatar_url: created.avatar_url,
+    role: created.role,
   }
-
-  // Prefer service-role upsert (bypasses missing INSERT RLS). Fall back to
-  // anon upsert in case an insert-own-profile policy exists.
-  const clients = []
-  try {
-    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      clients.push(await createAdminClient())
-    }
-  } catch {
-    // ignore admin client init failures
-  }
-  clients.push(supabase)
-
-  for (const client of clients) {
-    try {
-      const { data: upserted, error } = await client
-        .from('profiles')
-        .upsert(row, { onConflict: 'id' })
-        .select('full_name, image_url, role')
-        .single()
-
-      if (!error && upserted) {
-        return {
-          full_name: upserted.full_name,
-          image_url: upserted.image_url,
-          role: upserted.role,
-        }
-      }
-    } catch (err) {
-      console.error('Failed to upsert missing profile:', err)
-    }
-  }
-
-  // Navbar still works even if DB insert is blocked.
-  return fallback
 }

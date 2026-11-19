@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
+import { useState } from 'react'
 import { Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { mapReviewToFeedPost, type DbReview } from '@/lib/foodie-feed'
+import { mapDbPost, type DbPost } from '@/lib/foodie-feed'
 import type { FeedPost, FeedRestaurant, FeedUser } from '@/components/user/feed/types'
 
 interface Props {
@@ -12,213 +13,163 @@ interface Props {
   currentUser: FeedUser
   onClose: () => void
   onPosted: (post: FeedPost) => void
-  demoMode?: boolean
 }
 
-export default function ReviewComposer({ restaurants, currentUser, onClose, onPosted, demoMode = false }: Props) {
+const POST_IMAGE_LIMIT = 10 * 1024 * 1024
+const POST_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
+
+export default function ReviewComposer({ restaurants, currentUser, onClose, onPosted }: Props) {
   const [restaurantId, setRestaurantId] = useState(restaurants[0]?.id || '')
-  const [offers, setOffers] = useState<{ id: string; name: string }[]>([])
-  const [offerId, setOfferId] = useState('')
   const [rating, setRating] = useState(5)
-  const [comment, setComment] = useState('')
+  const [caption, setCaption] = useState('')
   const [file, setFile] = useState<File | null>(null)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (demoMode) return
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError('')
     if (!restaurantId) {
-      setOffers([])
-      setOfferId('')
+      setError('Choose a restaurant.')
       return
     }
-    fetch(`/api/offers/by-restaurant/${restaurantId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const list = Array.isArray(data)
-          ? data.map((row: { id: string; name: string }) => ({ id: row.id, name: row.name }))
-          : []
-        setOffers(list)
-        setOfferId('')
-      })
-      .catch(() => setOffers([]))
-  }, [restaurantId, demoMode])
+    if (!caption.trim()) {
+      setError('Write a caption for your post.')
+      return
+    }
+    if (!file) {
+      setError('Choose a photo for your post.')
+      return
+    }
+    if (!POST_IMAGE_TYPES.includes(file.type) || file.size > POST_IMAGE_LIMIT) {
+      setError('Choose a JPG, PNG, WebP, or AVIF photo smaller than 10 MB.')
+      return
+    }
 
-  async function submit() {
-    if (!restaurantId) {
-      toast.error('Pick a restaurant first.')
-      return
-    }
-    if (!comment.trim()) {
-      toast.error('Write a short review.')
-      return
-    }
     setLoading(true)
     try {
-      if (demoMode) {
-        const restaurant = restaurants.find((item) => item.id === restaurantId)
-        const post: FeedPost = {
-          id: `demo-review-${Date.now()}`,
-          userId: currentUser.id,
-          userName: currentUser.name,
-          userAvatar: currentUser.avatar,
-          restaurantId,
-          restaurantName: restaurant?.name || 'Local Restaurant',
-          rating,
-          text: comment.trim(),
-          image: file ? URL.createObjectURL(file) : restaurant?.image || undefined,
-          createdAt: new Date().toISOString(),
-          likes: 0,
-          likedByMe: false,
-          commentCount: 0,
-        }
-        onPosted(post)
-        toast.success('Demo review added to the feed')
+      const supabase = createClient()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) throw authError
+      if (!user || user.id !== currentUser.id) {
+        setError('Sign in again before creating a post.')
         return
       }
 
-      let images: string[] = []
-      if (file) {
-        const supabase = createClient()
-        const ext = file.name.split('.').pop() || 'jpg'
-        const path = `feed/${Date.now()}.${ext}`
-        const { error } = await supabase.storage.from('review-images').upload(path, file, {
-          contentType: file.type || 'image/jpeg',
-          upsert: true,
-        })
-        if (error) throw new Error(error.message)
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from('review-images').getPublicUrl(path)
-        images = [publicUrl]
-      }
+      const extension = file.type.split('/')[1] || 'jpg'
+      const path = `${user.id}/${crypto.randomUUID()}.${extension}`
+      const { data: uploaded, error: uploadError } = await supabase.storage
+        .from('post-images')
+        .upload(path, file, { upsert: false, contentType: file.type })
+      if (uploadError) throw uploadError
+      const { data: image } = supabase.storage.from('post-images').getPublicUrl(uploaded.path)
 
-      const res = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      const { data, error: postError } = await supabase
+        .from('posts')
+        .insert({
+          author_id: user.id,
           restaurant_id: restaurantId,
-          offer_id: offerId || null,
-          comment: comment.trim(),
-          rating_overall: rating,
-          rating_taste: rating,
-          rating_ambiance: rating,
-          rating_quality: rating,
-          rating_money_value: rating,
-          images,
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not post review')
+          image_url: image.publicUrl,
+          rating,
+          caption: caption.trim(),
+        })
+        .select(
+          'id, author_id, restaurant_id, image_url, rating, caption, created_at, profiles!posts_author_id_fkey(full_name, image_url, avatar_url), restaurants!posts_restaurant_id_fkey(id, name, city), post_likes(user_id), post_comments(id)'
+        )
+        .single()
+      if (postError) throw postError
 
-      const restaurantName = restaurants.find((r) => r.id === restaurantId)?.name || 'Local Restaurant'
-      const offerName = offers.find((o) => o.id === offerId)?.name
-      const mapped = mapReviewToFeedPost(data as DbReview, currentUser.id)
-      onPosted({
-        id: mapped?.id || data?.id || crypto.randomUUID(),
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userAvatar: currentUser.avatar,
-        restaurantId,
-        restaurantName,
-        offerName: offerName || mapped?.offerName,
-        rating,
-        text: comment.trim(),
-        image: images[0] || mapped?.image,
-        verified: true,
-        createdAt: mapped?.createdAt || new Date().toISOString(),
-        likes: 0,
-        likedByMe: false,
-        commentCount: 0,
-      })
-      toast.success('Review posted to the feed')
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not post review')
+      onPosted(mapDbPost(data as unknown as DbPost, user.id))
+      toast.success('Post shared')
+    } catch (submitError) {
+      const message = submitError instanceof Error ? submitError.message : 'Your post could not be shared.'
+      setError(message)
+      toast.error(message)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-5 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-black text-gray-900">Write a review</h3>
-          <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-700">
-            <X size={20} />
-          </button>
-        </div>
+    <Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[70] bg-[var(--plum)]/55 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[71] max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-3xl border border-[var(--border)] bg-white p-5 shadow-xl sm:p-7">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <Dialog.Title className="esr-serif text-2xl text-[var(--plum)]">Create a post</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-[var(--muted)]">
+                Share a restaurant photo, rating, and caption.
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <button type="button" aria-label="Close post form" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--plum)]">
+                <X aria-hidden="true" size={20} />
+              </button>
+            </Dialog.Close>
+          </div>
 
-        <label className="block text-xs font-bold text-gray-500 mb-1">Restaurant</label>
-        <select
-          value={restaurantId}
-          onChange={(e) => setRestaurantId(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3"
-        >
-          {restaurants.length === 0 && <option value="">No restaurants yet</option>}
-          {restaurants.map((restaurant) => (
-            <option key={restaurant.id} value={restaurant.id}>
-              {restaurant.name}
-            </option>
-          ))}
-        </select>
-
-        {offers.length > 0 && (
-          <>
-            <label className="block text-xs font-bold text-gray-500 mb-1">Offer (optional)</label>
-            <select
-              value={offerId}
-              onChange={(e) => setOfferId(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm mb-3"
-            >
-              <option value="">General visit</option>
-              {offers.map((offer) => (
-                <option key={offer.id} value={offer.id}>
-                  {offer.name}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
-
-        <p className="text-xs font-bold text-gray-500 mb-1">Rating</p>
-        <div className="flex gap-1 mb-3">
-          {[1, 2, 3, 4, 5].map((value) => (
-            <button key={value} type="button" onClick={() => setRating(value)} className="p-0.5">
-              <Star
-                size={22}
-                className={value <= rating ? 'text-amber-500 fill-amber-500' : 'text-gray-300'}
+          <form onSubmit={submit} className="space-y-4">
+            <div>
+              <label htmlFor="post-restaurant" className="mb-2 block text-sm font-semibold text-[var(--plum)]">Restaurant</label>
+              <select
+                id="post-restaurant"
+                value={restaurantId}
+                onChange={(event) => setRestaurantId(event.target.value)}
+                required
+                className="esr-auth-input min-h-12 w-full rounded-xl px-3 text-base"
+              >
+                {restaurants.length === 0 && <option value="">No restaurants available</option>}
+                {restaurants.map((restaurant) => <option key={restaurant.id} value={restaurant.id}>{restaurant.name}</option>)}
+              </select>
+            </div>
+            <fieldset>
+              <legend className="mb-2 text-sm font-semibold text-[var(--plum)]">Rating</legend>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-label={`${value} star${value === 1 ? '' : 's'}`}
+                    aria-pressed={rating === value}
+                    onClick={() => setRating(value)}
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-[var(--crimson)] hover:bg-[var(--surface-muted)]"
+                  >
+                    <Star aria-hidden="true" size={20} fill={value <= rating ? 'currentColor' : 'none'} />
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+            <div>
+              <label htmlFor="post-caption" className="mb-2 block text-sm font-semibold text-[var(--plum)]">Caption</label>
+              <textarea
+                id="post-caption"
+                value={caption}
+                onChange={(event) => setCaption(event.target.value)}
+                rows={4}
+                maxLength={2000}
+                required
+                className="esr-auth-input w-full rounded-xl p-3 text-base"
               />
+            </div>
+            <div>
+              <label htmlFor="post-photo" className="mb-2 block text-sm font-semibold text-[var(--plum)]">Photo</label>
+              <input
+                id="post-photo"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                required
+                onChange={(event) => setFile(event.target.files?.[0] || null)}
+                className="esr-auth-input min-h-12 w-full rounded-xl p-2 text-sm"
+              />
+            </div>
+            {error && <p role="alert" className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm text-[var(--plum)]">Error: {error}</p>}
+            <button type="submit" disabled={loading} className="esr-primary-button inline-flex min-h-12 w-full items-center justify-center rounded-xl px-5 text-base disabled:opacity-60">
+              {loading ? 'Sharing post…' : 'Share post'}
             </button>
-          ))}
-        </div>
-
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={4}
-          placeholder="How was the food, vibe, and value?"
-          className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm"
-        />
-
-        <label className="mt-3 block text-xs font-bold text-red-600 cursor-pointer">
-          {file ? file.name : '+ Add a photo'}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-        </label>
-
-        <button
-          type="button"
-          onClick={() => void submit()}
-          disabled={loading}
-          className="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 rounded-full disabled:opacity-60"
-        >
-          {loading ? 'Posting…' : 'Post review'}
-        </button>
-      </div>
-    </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   )
 }

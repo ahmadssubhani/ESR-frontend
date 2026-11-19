@@ -6,18 +6,11 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Heart, ChevronDown } from 'lucide-react'
 import { toggleSaveOffer, createClient } from '@/lib/supabase/client'
 import type { AdminAd, Offer } from '@/types/database'
-import {
-  isDbOfferId,
-  readSavedOfferIds,
-  writeSavedOfferIds,
-  upsertSavedOfferSnapshot,
-  removeSavedOfferSnapshot,
-} from '@/lib/saved-offers'
 import { toast } from 'sonner'
 import { PageLoader } from '@/components/ui/loader'
 import RestaurantDetailView from '@/components/user/RestaurantDetailView'
 
-interface OfferWithRestaurant extends Offer {
+export interface OfferWithRestaurant extends Offer {
   restaurants: {
     id: string
     name: string
@@ -45,7 +38,7 @@ interface Props {
   featured?: OfferWithRestaurant[]
   bumper?: OfferWithRestaurant[]
   initialOffers?: OfferWithRestaurant[]
-  demoMode?: boolean
+  initialError?: string
 }
 
 const discountPct = (o: Offer) =>
@@ -64,7 +57,7 @@ async function fetchNearbyRestaurants(lat: number, lng: number) {
   return []
 }
 
-export default function OffersClient({ ads = [], featured = [], bumper = [], initialOffers = [], demoMode = false }: Props) {
+export default function OffersClient({ ads = [], featured = [], bumper = [], initialOffers = [], initialError = '' }: Props) {
   const searchParams = useSearchParams()
   const router = useRouter()
   const tabParam = searchParams.get('tab')
@@ -79,24 +72,15 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
   const detailScrollPosition = useRef(0)
   const openedFromDiscover = useRef(false)
   const lastRestaurantLink = useRef<HTMLAnchorElement | null>(null)
-
-  useEffect(() => {
-    const savedReviews = localStorage.getItem('esr_reviewed_restaurants')
-    if (savedReviews) {
-      try {
-        const parsed = JSON.parse(savedReviews)
-        setReviewedRestaurantIds(new Set(parsed))
-      } catch (e) {
-        console.error(e)
-      }
-    }
-  }, [])
+  const lastRecordedRestaurant = useRef<string | null>(null)
 
   useEffect(() => {
     if (tabParam === 'foodies-feed') {
       router.replace('/user/foodies-feed')
       return
     }
+    // Keep the selected Discover view aligned with URL navigation.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActiveCategory(tabParam === 'saved' ? 'saved' : 'all')
   }, [tabParam, router])
 
@@ -108,8 +92,13 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
   const [savedOfferIds, setSavedOfferIds] = useState<Set<string>>(new Set())
   const [claimedOfferIds, setClaimedOfferIds] = useState<Set<string>>(new Set())
   const [userId, setUserId] = useState<string | null>(null)
+  const [authReady, setAuthReady] = useState(false)
+  const [authPrompt, setAuthPrompt] = useState('')
+  const [loadError, setLoadError] = useState(initialError)
 
   useEffect(() => {
+    // Reconcile realtime offer changes with refreshed server data.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOffers(initialOffers)
   }, [initialOffers])
 
@@ -145,7 +134,6 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
   }, [nearbyOffers, offers, selectedRestaurantId])
 
   useEffect(() => {
-    if (demoMode) return
     const supabase = createClient()
     const channel = supabase
       .channel('public-offers-live')
@@ -192,7 +180,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [demoMode, router])
+  }, [router])
 
   const applyNearbyResults = (data: OfferWithRestaurant[], options?: { activate?: boolean }) => {
     setNearbyOffers(data)
@@ -221,16 +209,6 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
       if (!options?.silent) {
         toast.error(message)
       }
-    }
-
-    if (demoMode) {
-      const localOffers = initialOffers.filter((offer) => offer.restaurants?.city === 'Karachi')
-      setNearbyOffers(localOffers)
-      setNearbyRestaurantsActive(true)
-      setLocMode(null)
-      setLocLoading(false)
-      toast.success(`Showing ${localOffers.length} demo restaurants in Karachi`)
-      return
     }
 
     const loadByCoords = async (lat: number, lng: number) => {
@@ -275,54 +253,40 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
   }
 
   useEffect(() => {
-    if (demoMode) {
-      setSavedOfferIds(new Set(readSavedOfferIds()))
-      try {
-        const claimed: unknown = JSON.parse(localStorage.getItem('esr_demo_claimed_offers') || '[]')
-        if (Array.isArray(claimed)) {
-          setClaimedOfferIds(new Set(claimed.filter((id): id is string => typeof id === 'string')))
-        }
-        const reviewed: unknown = JSON.parse(localStorage.getItem('esr_reviewed_restaurants') || '[]')
-        if (Array.isArray(reviewed)) {
-          setReviewedRestaurantIds(new Set(reviewed.filter((id): id is string => typeof id === 'string')))
-        }
-      } catch (error) {
-        console.error('Could not read saved demo activity:', error)
-      }
-      return
-    }
-
     async function loadUserData() {
-      const localIds = readSavedOfferIds()
-      if (localIds.length > 0) {
-        setSavedOfferIds(new Set(localIds))
-      }
-
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError) {
+        setLoadError(authError.message)
+        setAuthReady(true)
+        return
+      }
       if (user) {
         setUserId(user.id)
         const ago24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-        const [{ data }, { data: claimed }] = await Promise.all([
+        const [{ data, error: savedError }, { data: claimed, error: claimedError }, { data: reviewed, error: reviewsError }] = await Promise.all([
           supabase.from('user_offers').select('offer_id').eq('user_id', user.id),
           supabase.from('user_coupons').select('offer_id').eq('user_id', user.id).gte('used_at', ago24h),
+          supabase.from('reviews').select('restaurant_id').eq('user_id', user.id),
         ])
+        const resultError = savedError || claimedError || reviewsError
+        if (resultError) {
+          setLoadError(resultError.message)
+          setAuthReady(true)
+          return
+        }
         if (claimed) {
           setClaimedOfferIds(new Set(claimed.map((row) => row.offer_id).filter(Boolean)))
         }
         if (data) {
-          const rawOffers = data as unknown as { offer_id: string }[]
-          const serverSavedIds = rawOffers.map((item) => item.offer_id)
-          // Keep locally saved nearby/live restaurants; only replace DB offer IDs from server
-          const localExternalIds = readSavedOfferIds().filter((id) => !isDbOfferId(id))
-          const merged = Array.from(new Set([...serverSavedIds, ...localExternalIds]))
-          setSavedOfferIds(new Set(merged))
-          writeSavedOfferIds(merged)
+          setSavedOfferIds(new Set(data.map((item) => item.offer_id)))
         }
+        if (reviewed) setReviewedRestaurantIds(new Set(reviewed.map((review) => review.restaurant_id)))
       }
+      setAuthReady(true)
     }
-    loadUserData()
-  }, [demoMode])
+    void loadUserData()
+  }, [])
 
   const activeOffersList = activeCategory === 'saved'
     ? [...offers, ...nearbyOffers].filter(
@@ -369,36 +333,27 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     e.preventDefault()
     e.stopPropagation()
 
+    if (!userId) {
+      setAuthPrompt('Sign in to save restaurants and offers.')
+      return
+    }
+
     const offerId = offer.id
     const isSaved = savedOfferIds.has(offerId)
-    const newSaved = new Set(savedOfferIds)
-    if (isSaved) newSaved.delete(offerId)
-    else newSaved.add(offerId)
-
-    setSavedOfferIds(newSaved)
-    writeSavedOfferIds(Array.from(newSaved))
-
-    if (isSaved) {
-      removeSavedOfferSnapshot(offerId)
-      toast.success('Removed from saved')
-    } else {
-      upsertSavedOfferSnapshot(offer)
-      toast.success('Saved to favourites')
+    const { error } = await toggleSaveOffer(userId, offerId, isSaved)
+    if (error) {
+      console.error('Failed to save offer:', error)
+      toast.error('Could not update your saved offers.')
+      return
     }
-
-    // Only real DB offer UUIDs can be stored in user_offers
-    if (userId && isDbOfferId(offerId)) {
-      const { error } = await toggleSaveOffer(userId, offerId, isSaved)
-      if (error) {
-        // Roll back optimistic UI on DB failure
-        setSavedOfferIds(savedOfferIds)
-        writeSavedOfferIds(Array.from(savedOfferIds))
-        if (isSaved) upsertSavedOfferSnapshot(offer)
-        else removeSavedOfferSnapshot(offerId)
-        console.error('Failed to sync saved offer:', error)
-        toast.error('Could not sync save — try again')
-      }
-    }
+    setSavedOfferIds((current) => {
+      const next = new Set(current)
+      if (isSaved) next.delete(offerId)
+      else next.add(offerId)
+      return next
+    })
+    setAuthPrompt('')
+    toast.success(isSaved ? 'Removed from saved' : 'Saved to favourites')
   }
 
   const openRestaurant = (offer: OfferWithRestaurant, link?: HTMLAnchorElement) => {
@@ -408,24 +363,30 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     detailScrollPosition.current = window.scrollY
     openedFromDiscover.current = true
     lastRestaurantLink.current = link || null
-    try {
-      const recent: unknown = JSON.parse(localStorage.getItem('esr_recent_restaurants') || '[]')
-      const recentIds = Array.isArray(recent)
-        ? recent.filter((id): id is string => typeof id === 'string')
-        : []
-      localStorage.setItem(
-        'esr_recent_restaurants',
-        JSON.stringify([restaurantId, ...recentIds.filter((id) => id !== restaurantId)].slice(0, 5))
-      )
-      window.dispatchEvent(new Event('esr-recent-restaurants-updated'))
-    } catch (error) {
-      console.error('Could not update recently viewed restaurants:', error)
-    }
-
     window.history.pushState(null, '', `#restaurant/${encodeURIComponent(restaurantId)}`)
     setSelectedRestaurantId(restaurantId)
     window.scrollTo({ top: 0, behavior: 'instant' })
   }
+
+  useEffect(() => {
+    if (!authReady) return
+    if (!selectedRestaurantId) {
+      lastRecordedRestaurant.current = null
+      return
+    }
+    if (lastRecordedRestaurant.current === selectedRestaurantId) return
+    lastRecordedRestaurant.current = selectedRestaurantId
+
+    if (userId) {
+      const supabase = createClient()
+      void supabase.from('restaurant_views').insert({
+        user_id: userId,
+        restaurant_id: selectedRestaurantId,
+      }).then(({ error }) => {
+        if (error) console.error('Could not save restaurant view:', error)
+      })
+    }
+  }, [authReady, selectedRestaurantId, userId])
 
   const returnToDiscover = () => {
     if (openedFromDiscover.current) {
@@ -453,17 +414,10 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
         key={selectedRestaurant.id}
         restaurant={selectedRestaurant}
         offers={restaurantOffers}
-        demoMode={demoMode}
         userId={userId}
         claimedOfferIds={claimedOfferIds}
         reviewedRestaurantIds={reviewedRestaurantIds}
-        onClaimed={(offerId) => {
-          setClaimedOfferIds((current) => {
-            const next = new Set(current).add(offerId)
-            if (demoMode) localStorage.setItem('esr_demo_claimed_offers', JSON.stringify(Array.from(next)))
-            return next
-          })
-        }}
+        onClaimed={(offerId) => setClaimedOfferIds((current) => new Set(current).add(offerId))}
         onReviewed={(restaurantId) =>
           setReviewedRestaurantIds((current) => new Set(current).add(restaurantId))
         }
@@ -530,6 +484,20 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
         ))}
       </div>
 
+      {loadError && (
+        <p role="alert" className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm text-[var(--plum)]">
+          Restaurant data could not be loaded: {loadError}
+        </p>
+      )}
+      {authPrompt && (
+        <p role="status" className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm text-[var(--plum)]">
+          {authPrompt}{' '}
+          <a href="/auth/login?next=%2Fuser%2Foffers" className="font-semibold text-[var(--crimson)] underline underline-offset-2">Login</a>
+          {' '}or{' '}
+          <a href="/auth/signup" className="font-semibold text-[var(--crimson)] underline underline-offset-2">sign up</a>.
+        </p>
+      )}
+
       {ads.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {ads.map((ad) => {
@@ -571,7 +539,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Restaurant, cuisine or area — e.g. Gulberg"
+              placeholder="Restaurant, cuisine or area"
               className="min-h-14 w-full border-0 bg-transparent px-4 py-3 text-base font-normal text-[var(--foreground)] placeholder:text-[var(--muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--crimson)]"
             />
           </div>
@@ -730,13 +698,7 @@ function OfferCard({
   onOpen: (event: React.MouseEvent<HTMLAnchorElement>) => void
 }) {
   const restaurantName = offer.restaurants?.name || offer.name
-  const demoImage: Record<string, string> = {
-    'demo-karachi-karahi': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=85',
-    'demo-bun-kabab': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85',
-    'demo-lahori-dastarkhwan': 'https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=1200&q=85',
-    'demo-oven-story': 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?auto=format&fit=crop&w=1200&q=85',
-  }
-  const assignedImage = demoImage[offer.restaurant_id] ||
+  const assignedImage =
     offer.restaurants?.cover_url ||
     offer.restaurants?.logo_url ||
     offer.image_url ||

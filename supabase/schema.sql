@@ -23,8 +23,9 @@ create table if not exists profiles (
   phone text,
   location text,
   image_url text,
+  avatar_url text,
   registration_code text,
-  role text not null default 'customer' check (role in ('customer', 'owner', 'admin')),
+  role text not null default 'user' check (role in ('user', 'restaurant', 'admin')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -286,26 +287,6 @@ create table if not exists review_comments (
 create index if not exists review_comments_review_id_idx on review_comments (review_id, created_at);
 
 -- =============================================
--- FEED STORIES / REELS
--- =============================================
-create table if not exists feed_stories (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references profiles(id) on delete cascade,
-  media_url text,
-  media_type text not null check (media_type in ('image', 'video', 'embed')),
-  caption text,
-  source text not null default 'esr' check (source in ('esr', 'instagram', 'facebook')),
-  external_url text,
-  embed_url text,
-  restaurant_id uuid references restaurants(id) on delete set null,
-  expires_at timestamptz not null default (now() + interval '24 hours'),
-  created_at timestamptz not null default now()
-);
-
-create index if not exists feed_stories_expires_at_idx on feed_stories (expires_at desc);
-create index if not exists feed_stories_user_id_idx on feed_stories (user_id, created_at desc);
-
--- =============================================
 -- ADMIN ADS
 -- =============================================
 create table if not exists admin_ads (
@@ -484,7 +465,6 @@ alter table reviews enable row level security;
 alter table review_images enable row level security;
 alter table review_likes enable row level security;
 alter table review_comments enable row level security;
-alter table feed_stories enable row level security;
 alter table admin_ads enable row level security;
 alter table application_versions enable row level security;
 alter table categories enable row level security;
@@ -502,7 +482,7 @@ begin
       and tablename in (
         'profiles', 'categories', 'restaurants', 'restaurant_menu_images',
         'offers', 'coupons', 'user_coupons', 'user_offers',
-        'reviews', 'review_images', 'review_likes', 'review_comments', 'feed_stories',
+        'reviews', 'review_images', 'review_likes', 'review_comments',
         'admin_ads', 'application_versions'
       )
   loop
@@ -761,24 +741,6 @@ create policy "Admins can manage review comments"
   using (public.is_admin())
   with check (public.is_admin());
 
--- FEED STORIES
-create policy "Anyone can view live stories"
-  on feed_stories for select
-  using (expires_at > now());
-
-create policy "Users can post own stories"
-  on feed_stories for insert
-  with check (auth.uid() = user_id);
-
-create policy "Users can delete own stories"
-  on feed_stories for delete
-  using (auth.uid() = user_id);
-
-create policy "Admins can manage feed stories"
-  on feed_stories for all
-  using (public.is_admin())
-  with check (public.is_admin());
-
 -- ADMIN ADS
 create policy "Anyone can view active ads"
   on admin_ads for select
@@ -814,7 +776,6 @@ insert into storage.buckets (id, name, public)
 values
   ('restaurant-images', 'restaurant-images', true),
   ('review-images', 'review-images', true),
-  ('feed-stories', 'feed-stories', true),
   ('ads', 'ads', true)
 on conflict (id) do update
   set public = excluded.public;
@@ -843,10 +804,6 @@ create policy "ESR public read review-images"
   on storage.objects for select
   using (bucket_id = 'review-images');
 
-create policy "ESR public read feed-stories"
-  on storage.objects for select
-  using (bucket_id = 'feed-stories');
-
 create policy "ESR public read ads"
   on storage.objects for select
   using (bucket_id = 'ads');
@@ -858,10 +815,6 @@ create policy "ESR auth upload restaurant-images"
 create policy "ESR auth upload review-images"
   on storage.objects for insert
   with check (bucket_id = 'review-images' and auth.uid() is not null);
-
-create policy "ESR auth upload feed-stories"
-  on storage.objects for insert
-  with check (bucket_id = 'feed-stories' and auth.uid() is not null);
 
 create policy "ESR auth upload ads"
   on storage.objects for insert
@@ -875,10 +828,6 @@ create policy "ESR auth update own review-images"
   on storage.objects for update
   using (bucket_id = 'review-images' and auth.uid() is not null);
 
-create policy "ESR auth update feed-stories"
-  on storage.objects for update
-  using (bucket_id = 'feed-stories' and auth.uid() is not null);
-
 create policy "ESR auth update ads"
   on storage.objects for update
   using (bucket_id = 'ads' and auth.uid() is not null);
@@ -886,10 +835,6 @@ create policy "ESR auth update ads"
 create policy "ESR auth delete own review-images"
   on storage.objects for delete
   using (bucket_id = 'review-images' and auth.uid() is not null);
-
-create policy "ESR auth delete feed-stories"
-  on storage.objects for delete
-  using (bucket_id = 'feed-stories' and auth.uid() is not null);
 
 create policy "ESR auth delete restaurant-images"
   on storage.objects for delete
@@ -953,11 +898,6 @@ end $$;
 do $$
 begin
   alter publication supabase_realtime add table review_comments;
-exception when duplicate_object then null;
-end $$;
-do $$
-begin
-  alter publication supabase_realtime add table feed_stories;
 exception when duplicate_object then null;
 end $$;
 

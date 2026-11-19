@@ -8,7 +8,7 @@ export default async function NewOfferPage() {
   const profile = profileData as { role: string } | null
 
   let query = supabase.from('restaurants').select('id, name')
-  if (profile?.role === 'owner') query = query.eq('owner_id', user!.id)
+  if (profile?.role === 'restaurant') query = query.eq('owner_id', user!.id)
   const { data: restaurants } = await query.order('name')
 
   return (

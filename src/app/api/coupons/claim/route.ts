@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createAdminClient, getApiUser } from '@/lib/supabase/server'
-import { generateEsrVoucherCode } from '@/lib/esr-voucher-code'
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
@@ -39,13 +38,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'This offer has expired.' }, { status: 422 })
   }
 
-  let { data: coupons } = await admin
+  const { data: loadedCoupons, error: couponsError } = await admin
     .from('coupons')
     .select('id, code, active')
     .eq('offer_id', offerId)
     .eq('active', true)
     .limit(1)
 
+  if (couponsError) {
+    return NextResponse.json({ error: 'Could not load a voucher for this offer.' }, { status: 500 })
+  }
+
+  let coupons = loadedCoupons
   if (!coupons?.length) {
     const { data: created, error: couponError } = await admin
       .from('coupons')
@@ -65,9 +69,12 @@ export async function POST(request: NextRequest) {
   }
 
   const coupon = coupons[0]
+  if (!coupon?.code) {
+    return NextResponse.json({ error: 'The active voucher does not have a code.' }, { status: 500 })
+  }
   const ago24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  const { data: existing } = await admin
+  const { data: existing, error: existingError } = await admin
     .from('user_coupons')
     .select('id, used_at, coupon_id')
     .eq('user_id', user.id)
@@ -76,21 +83,37 @@ export async function POST(request: NextRequest) {
     .order('used_at', { ascending: false })
     .limit(1)
 
+  if (existingError) {
+    return NextResponse.json({ error: 'Could not check your existing voucher claim.' }, { status: 500 })
+  }
+
   if (existing?.length) {
+    const { data: existingCoupon, error: existingCouponError } = await admin
+      .from('coupons')
+      .select('code')
+      .eq('id', existing[0].coupon_id)
+      .maybeSingle()
+    if (existingCouponError || !existingCoupon?.code) {
+      return NextResponse.json({ error: 'Could not load your existing voucher code.' }, { status: 500 })
+    }
     return NextResponse.json({
       claimed: true,
       already_claimed: true,
-      voucher_code: generateEsrVoucherCode(offerId),
+      voucher_code: existingCoupon.code,
       claimed_at: existing[0].used_at,
       message: 'You already claimed this voucher today. Show this code at checkout.',
     })
   }
 
-  const { count: todayCount } = await admin
+  const { count: todayCount, error: countError } = await admin
     .from('user_coupons')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .gte('used_at', ago24h)
+
+  if (countError) {
+    return NextResponse.json({ error: 'Could not check your voucher claim limit.' }, { status: 500 })
+  }
 
   if ((todayCount ?? 0) >= 5) {
     return NextResponse.json(
@@ -116,7 +139,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     claimed: true,
     already_claimed: false,
-    voucher_code: generateEsrVoucherCode(offerId),
+    voucher_code: coupon.code,
     claimed_at: redemption.used_at,
     message: 'Voucher claimed. Show this code at checkout.',
   })

@@ -6,16 +6,16 @@ import { LayoutDashboard, UtensilsCrossed, Tag, Ticket, Receipt, Star, Megaphone
 import { useState } from 'react'
 
 const NAV_ITEMS = [
-  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'owner'] },
-  { href: '/admin/restaurants', label: 'Restaurants', icon: UtensilsCrossed, roles: ['admin', 'owner'] },
-  { href: '/admin/offers', label: 'Offers', icon: Tag, roles: ['admin', 'owner'] },
-  { href: '/admin/coupons', label: 'Coupons', icon: Ticket, roles: ['admin', 'owner'] },
-  { href: '/admin/vouchers', label: 'Claimed Vouchers', icon: Receipt, roles: ['admin', 'owner'] },
-  { href: '/admin/reviews', label: 'Reviews', icon: Star, roles: ['admin', 'owner'] },
+  { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'restaurant'] },
+  { href: '/admin/restaurants', label: 'Restaurants', icon: UtensilsCrossed, roles: ['admin', 'restaurant'] },
+  { href: '/admin/offers', label: 'Offers', icon: Tag, roles: ['admin', 'restaurant'] },
+  { href: '/admin/coupons', label: 'Coupons', icon: Ticket, roles: ['admin', 'restaurant'] },
+  { href: '/admin/vouchers', label: 'Claimed Vouchers', icon: Receipt, roles: ['admin', 'restaurant'] },
+  { href: '/admin/reviews', label: 'Reviews', icon: Star, roles: ['admin', 'restaurant'] },
   { href: '/admin/ads', label: 'Ads', icon: Megaphone, roles: ['admin'] },
   { href: '/admin/app-version', label: 'App Version', icon: Smartphone, roles: ['admin'] },
   { href: '/admin/users', label: 'Users', icon: Users, roles: ['admin'] },
-  { href: '/admin/analytics', label: 'Analytics', icon: BarChart2, roles: ['admin', 'owner'] },
+  { href: '/admin/analytics', label: 'Analytics', icon: BarChart2, roles: ['admin', 'restaurant'] },
 ]
 
 export default function AdminSidebar({ role }: { role: string; name: string }) {
@@ -26,7 +26,7 @@ export default function AdminSidebar({ role }: { role: string; name: string }) {
   async function signOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
-    router.push('/')
+    router.push('/user/offers#discover')
     router.refresh()
   }
 
@@ -69,4 +69,3 @@ export default function AdminSidebar({ role }: { role: string; name: string }) {
     </aside>
   )
 }
-

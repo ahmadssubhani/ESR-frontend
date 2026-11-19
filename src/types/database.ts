@@ -11,8 +11,9 @@ export type Database = {
           phone: string | null
           location: string | null
           image_url: string | null
+          avatar_url: string | null
           registration_code: string | null
-          role: 'customer' | 'owner' | 'admin'
+          role: 'user' | 'restaurant' | 'admin'
           created_at: string
           updated_at: string
         }
@@ -190,6 +191,27 @@ export type Database = {
           },
         ]
       }
+      user_restaurants: {
+        Row: { id: string; user_id: string; restaurant_id: string; created_at: string }
+        Insert: { user_id: string; restaurant_id: string; id?: string; created_at?: string }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'user_restaurants_restaurant_id_fkey'
+            columns: ['restaurant_id']
+            isOneToOne: false
+            referencedRelation: 'restaurants'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'user_restaurants_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       reviews: {
         Row: {
           id: string
@@ -299,47 +321,145 @@ export type Database = {
           },
         ]
       }
-      feed_stories: {
+      posts: {
         Row: {
           id: string
-          user_id: string
-          media_url: string | null
-          media_type: 'image' | 'video' | 'embed'
-          caption: string | null
-          source: 'esr' | 'instagram' | 'facebook'
-          external_url: string | null
-          embed_url: string | null
-          restaurant_id: string | null
-          expires_at: string
+          author_id: string
+          restaurant_id: string
+          image_url: string
+          rating: number
+          caption: string
           created_at: string
         }
         Insert: {
-          user_id: string
-          media_type: 'image' | 'video' | 'embed'
+          author_id: string
+          restaurant_id: string
+          image_url: string
+          rating: number
+          caption: string
           id?: string
-          media_url?: string | null
-          caption?: string | null
-          source?: 'esr' | 'instagram' | 'facebook'
-          external_url?: string | null
-          embed_url?: string | null
-          restaurant_id?: string | null
-          expires_at?: string
           created_at?: string
         }
         Update: never
         Relationships: [
           {
-            foreignKeyName: 'feed_stories_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: 'posts_author_id_fkey'
+            columns: ['author_id']
             isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
-            foreignKeyName: 'feed_stories_restaurant_id_fkey'
+            foreignKeyName: 'posts_restaurant_id_fkey'
             columns: ['restaurant_id']
             isOneToOne: false
             referencedRelation: 'restaurants'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      post_likes: {
+        Row: { post_id: string; user_id: string; created_at: string }
+        Insert: { post_id: string; user_id: string; created_at?: string }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'post_likes_post_id_fkey'
+            columns: ['post_id']
+            isOneToOne: false
+            referencedRelation: 'posts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'post_likes_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      post_comments: {
+        Row: {
+          id: string
+          post_id: string
+          user_id: string
+          body: string
+          created_at: string
+        }
+        Insert: { post_id: string; user_id: string; body: string; id?: string; created_at?: string }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'post_comments_post_id_fkey'
+            columns: ['post_id']
+            isOneToOne: false
+            referencedRelation: 'posts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'post_comments_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      restaurant_views: {
+        Row: { id: number; user_id: string; restaurant_id: string; viewed_at: string }
+        Insert: { user_id: string; restaurant_id: string; viewed_at?: string }
+        Update: never
+        Relationships: [
+          {
+            foreignKeyName: 'restaurant_views_restaurant_id_fkey'
+            columns: ['restaurant_id']
+            isOneToOne: false
+            referencedRelation: 'restaurants'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'restaurant_views_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          id: string
+          recipient_id: string
+          actor_id: string | null
+          type: 'voucher' | 'like' | 'comment'
+          entity_id: string | null
+          created_at: string
+          read_at: string | null
+        }
+        Insert: {
+          recipient_id: string
+          type: 'voucher' | 'like' | 'comment'
+          actor_id?: string | null
+          entity_id?: string | null
+          id?: string
+          created_at?: string
+          read_at?: string | null
+        }
+        Update: { read_at?: string | null }
+        Relationships: [
+          {
+            foreignKeyName: 'notifications_actor_id_fkey'
+            columns: ['actor_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'notifications_recipient_id_fkey'
+            columns: ['recipient_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
         ]
@@ -406,7 +526,7 @@ export type UserOffer = Database['public']['Tables']['user_offers']['Row']
 export type Review = Database['public']['Tables']['reviews']['Row']
 export type ReviewImage = Database['public']['Tables']['review_images']['Row']
 export type ReviewComment = Database['public']['Tables']['review_comments']['Row']
-export type FeedStoryRow = Database['public']['Tables']['feed_stories']['Row']
+export type FeedPostRow = Database['public']['Tables']['posts']['Row']
 export type AdminAd = Database['public']['Tables']['admin_ads']['Row']
 export type ApplicationVersion = Database['public']['Tables']['application_versions']['Row']
 

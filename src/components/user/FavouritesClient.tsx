@@ -1,128 +1,182 @@
 'use client'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { Trash2 } from 'lucide-react'
-import {
-  isDbOfferId,
-  readSavedOfferIds,
-  readSavedOfferSnapshots,
-  removeSavedOfferSnapshot,
-  writeSavedOfferIds,
-  type SavedOfferSnapshot,
-} from '@/lib/saved-offers'
-import { toast } from 'sonner'
-import { InlineLoader } from '@/components/ui/loader'
 
-interface WishlistItem {
+import Image from 'next/image'
+import Link from 'next/link'
+import { useState } from 'react'
+import { Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
+
+type SavedOffer = {
   id: string
   offer_id: string
   offers: {
-    id: string; name: string; discounted_price: number; original_price: number
+    id: string
+    name: string
+    discounted_price: number
+    original_price: number
     image_url: string | null
-    restaurants: { name: string; cover_url: string | null; categories: { name: string } | null } | null
+    restaurant_id: string
+    restaurants: {
+      name: string
+      cover_url: string | null
+      categories: { name: string } | null
+    } | null
   } | null
 }
 
-function mergeItems(dbItems: WishlistItem[], localItems: SavedOfferSnapshot[]): WishlistItem[] {
-  const byOfferId = new Map<string, WishlistItem>()
-  for (const item of localItems) {
-    byOfferId.set(item.offer_id, item)
-  }
-  for (const item of dbItems) {
-    if (item.offers) byOfferId.set(item.offer_id, item)
-  }
-  return Array.from(byOfferId.values())
+type SavedRestaurant = {
+  id: string
+  restaurant_id: string
+  restaurants: {
+    id: string
+    name: string
+    city: string | null
+    cover_url: string | null
+  } | null
 }
 
-export default function FavouritesClient({ initialItems, demoMode = false }: { initialItems: WishlistItem[]; demoMode?: boolean }) {
-  const [items, setItems] = useState<WishlistItem[]>(initialItems)
-  const [ready, setReady] = useState(false)
+interface Props {
+  initialItems: SavedOffer[]
+  initialRestaurants: SavedRestaurant[]
+  userId: string
+}
 
-  useEffect(() => {
-    setItems(mergeItems(initialItems, readSavedOfferSnapshots()))
-    setReady(true)
-  }, [initialItems])
+export default function FavouritesClient({ initialItems, initialRestaurants, userId }: Props) {
+  const [items, setItems] = useState(initialItems)
+  const [restaurants, setRestaurants] = useState(initialRestaurants)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [error, setError] = useState('')
 
-  async function remove(offerId: string) {
-    if (!demoMode && isDbOfferId(offerId)) {
-      await fetch(`/api/wishlist/${offerId}`, { method: 'DELETE' })
+  async function removeOffer(offerId: string) {
+    setBusyId(offerId)
+    setError('')
+    try {
+      const supabase = createClient()
+      const { error: deleteError } = await supabase
+        .from('user_offers')
+        .delete()
+        .eq('user_id', userId)
+        .eq('offer_id', offerId)
+      if (deleteError) throw deleteError
+      setItems((current) => current.filter((item) => item.offer_id !== offerId))
+      toast.success('Removed from saved offers')
+    } catch (removeError) {
+      const message = removeError instanceof Error ? removeError.message : 'Could not remove this offer.'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setBusyId(null)
     }
-
-    removeSavedOfferSnapshot(offerId)
-    const nextIds = readSavedOfferIds().filter((id) => id !== offerId)
-    writeSavedOfferIds(nextIds)
-    setItems((prev) => prev.filter((item) => item.offer_id !== offerId))
-    toast.success('Removed from saved')
   }
 
-  if (!ready) {
-    return <InlineLoader label="Loading saved offers…" />
+  async function removeRestaurant(restaurantId: string) {
+    setBusyId(restaurantId)
+    setError('')
+    try {
+      const supabase = createClient()
+      const { error: deleteError } = await supabase
+        .from('user_restaurants')
+        .delete()
+        .eq('user_id', userId)
+        .eq('restaurant_id', restaurantId)
+      if (deleteError) throw deleteError
+      setRestaurants((current) => current.filter((item) => item.restaurant_id !== restaurantId))
+      toast.success('Removed from saved restaurants')
+    } catch (removeError) {
+      const message = removeError instanceof Error ? removeError.message : 'Could not remove this restaurant.'
+      setError(message)
+      toast.error(message)
+    } finally {
+      setBusyId(null)
+    }
   }
 
-  if (items.length === 0) {
-    return (
-      <div className="text-center py-20 text-gray-400">
-        <div className="text-5xl mb-4">❤️</div>
-        <h2 className="font-bold text-gray-900 mb-2">No saved offers yet</h2>
-        <p className="text-sm mb-6">Tap the heart icon on any offer to save it here.</p>
-        <Link href="/user/offers" className="bg-red-600 text-white font-semibold px-6 py-3 rounded-xl hover:bg-red-700 transition-colors">
-          Browse Offers
-        </Link>
-      </div>
-    )
-  }
+  const isEmpty = items.length === 0 && restaurants.length === 0
 
   return (
-    <div>
-      <h1 className="text-xl font-black text-gray-900 mb-6">❤️ Saved Offers ({items.length})</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {items.map(item => {
-          const offer = item.offers
-          if (!offer) return null
-          const discountPct = offer.original_price > 0
-            ? Math.ceil(100 - (offer.discounted_price / offer.original_price) * 100) : 0
-          const isLocalOnly = !isDbOfferId(offer.id)
-          const card = (
-            <>
-              <div className="relative h-36 bg-gray-100">
-                {offer.image_url || offer.restaurants?.cover_url ? (
-                  <img src={offer.image_url || offer.restaurants?.cover_url || ''} alt={offer.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl">🍽️</div>
-                )}
-                {discountPct > 0 && (
-                  <div className="absolute top-2 right-2 bg-red-600 text-white text-xs font-black px-2 py-1 rounded-lg">{discountPct}% OFF</div>
-                )}
-              </div>
-              <div className="p-4">
-                <p className="text-xs text-gray-400 mb-1">{offer.restaurants?.name} · {offer.restaurants?.categories?.name}</p>
-                <h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2">{offer.name}</h3>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[var(--crimson)] font-semibold">Rs {offer.discounted_price}</span>
-                    {offer.original_price > 0 && <span className="text-gray-400 text-xs line-through ml-2">Rs {offer.original_price}</span>}
-                  </div>
-                </div>
-              </div>
-            </>
-          )
-          return (
-            <div key={item.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden group">
-              {isLocalOnly ? (
-                <div>{card}</div>
-              ) : (
-                <Link href={`/user/offers/${offer.id}`}>{card}</Link>
-              )}
-              <div className="px-4 pb-4">
-                <button onClick={() => remove(offer.id)}
-                  className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-500 text-sm py-2 rounded-xl hover:bg-red-50 transition-colors">
-                  <Trash2 size={14} /> Remove
-                </button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+    <div className="space-y-8">
+      <header>
+        <p className="esr-eyebrow">Your saved places</p>
+        <h1 className="esr-serif mt-2 text-3xl text-[var(--plum)]">Favourites</h1>
+      </header>
+      {error && <p role="alert" className="rounded-xl bg-[var(--surface-muted)] p-4 text-sm text-[var(--plum)]">Error: {error}</p>}
+      {isEmpty ? (
+        <div className="esr-card py-16 text-center">
+          <h2 className="esr-serif text-2xl text-[var(--plum)]">No saved places yet</h2>
+          <p className="mt-2 text-sm text-[var(--muted)]">Save a restaurant or offer to find it here.</p>
+          <Link href="/user/offers" className="esr-primary-button mt-5 inline-flex min-h-11 items-center px-6">Explore restaurants</Link>
+        </div>
+      ) : (
+        <>
+          {restaurants.length > 0 && (
+            <section aria-labelledby="saved-restaurants-heading">
+              <h2 id="saved-restaurants-heading" className="esr-serif mb-4 text-2xl text-[var(--plum)]">Saved restaurants</h2>
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {restaurants.map((item) => {
+                  const restaurant = item.restaurants
+                  if (!restaurant) return null
+                  return (
+                    <li key={item.id} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+                      <Link href={`/user/offers#restaurant/${encodeURIComponent(restaurant.id)}`} className="block">
+                        <div className="relative aspect-[11/6] bg-[var(--surface-muted)]">
+                          {restaurant.cover_url && <Image src={restaurant.cover_url} alt="" fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />}
+                        </div>
+                        <div className="p-4">
+                          <h3 className="esr-serif text-xl text-[var(--plum)]">{restaurant.name}</h3>
+                          <p className="mt-1 text-sm text-[var(--muted)]">{restaurant.city || 'Pakistan'}</p>
+                        </div>
+                      </Link>
+                      <div className="px-4 pb-4">
+                        <button type="button" disabled={busyId === restaurant.id} onClick={() => void removeRestaurant(restaurant.id)} className="esr-outline-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm text-[var(--crimson)] disabled:opacity-60">
+                          <Trash2 aria-hidden="true" size={16} /> Remove
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+
+          {items.length > 0 && (
+            <section aria-labelledby="saved-offers-heading">
+              <h2 id="saved-offers-heading" className="esr-serif mb-4 text-2xl text-[var(--plum)]">Saved offers</h2>
+              <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {items.map((item) => {
+                  const offer = item.offers
+                  if (!offer) return null
+                  const percent = offer.original_price > 0
+                    ? Math.ceil(100 - (offer.discounted_price / offer.original_price) * 100)
+                    : 0
+                  return (
+                    <li key={item.id} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white">
+                      <Link href={`/user/offers/${offer.id}`} className="block">
+                        <div className="relative aspect-[11/6] bg-[var(--surface-muted)]">
+                          {(offer.image_url || offer.restaurants?.cover_url) && (
+                            <Image src={offer.image_url || offer.restaurants?.cover_url || ''} alt="" fill sizes="(max-width: 640px) 100vw, 33vw" className="object-cover" />
+                          )}
+                          {percent > 0 && <span className="absolute right-3 top-3 rounded-full bg-[var(--crimson)] px-3 py-1 text-sm font-semibold text-white">{percent}% OFF</span>}
+                        </div>
+                        <div className="p-4">
+                          <p className="text-sm text-[var(--muted)]">{offer.restaurants?.name || 'Restaurant'} · {offer.restaurants?.categories?.name || 'Dining'}</p>
+                          <h3 className="esr-serif mt-1 text-xl text-[var(--plum)]">{offer.name}</h3>
+                          <p className="mt-2 font-semibold text-[var(--crimson)]">PKR {offer.discounted_price.toLocaleString('en-PK')}</p>
+                        </div>
+                      </Link>
+                      <div className="px-4 pb-4">
+                        <button type="button" disabled={busyId === offer.id} onClick={() => void removeOffer(offer.id)} className="esr-outline-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full px-4 text-sm text-[var(--crimson)] disabled:opacity-60">
+                          <Trash2 aria-hidden="true" size={16} /> Remove
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
     </div>
   )
 }

@@ -3,81 +3,101 @@
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { BadgeCheck, Heart, MapPin, MessageCircle, Send } from 'lucide-react'
+import { Heart, MessageCircle, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import type { FeedComment, FeedPost, FeedUser } from '@/components/user/feed/types'
 import { DEFAULT_AVATAR } from '@/lib/foodie-feed'
+import { createClient } from '@/lib/supabase/client'
 
 interface Props {
   post: FeedPost
   currentUser: FeedUser
   onPostChange: (next: FeedPost) => void
-  demoMode?: boolean
+}
+
+type CommentRow = {
+  id: string
+  post_id: string
+  user_id: string
+  body: string
+  created_at: string
+  profiles?: { full_name?: string | null; image_url?: string | null; avatar_url?: string | null } |
+    { full_name?: string | null; image_url?: string | null; avatar_url?: string | null }[] | null
+}
+
+function mapComment(row: CommentRow): FeedComment {
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles
+  return {
+    id: row.id,
+    postId: row.post_id,
+    userId: row.user_id,
+    userName: profile?.full_name || 'ESR Foodie',
+    userAvatar: profile?.avatar_url || profile?.image_url || DEFAULT_AVATAR,
+    body: row.body,
+    createdAt: row.created_at,
+  }
 }
 
 function formatDate(iso?: string) {
   if (!iso) return 'Recently'
-  try {
-    return new Date(iso).toLocaleDateString('en-PK', { month: 'short', day: 'numeric', year: 'numeric' })
-  } catch {
-    return 'Recently'
-  }
+  const date = new Date(iso)
+  return Number.isNaN(date.getTime())
+    ? 'Recently'
+    : date.toLocaleDateString('en-PK', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-function mapComment(row: Record<string, unknown>): FeedComment {
-  const profile = (Array.isArray(row.profiles) ? row.profiles[0] : row.profiles) as
-    | { full_name?: string | null; image_url?: string | null }
-    | null
-  return {
-    id: String(row.id),
-    reviewId: String(row.review_id),
-    userId: String(row.user_id),
-    userName: profile?.full_name || 'Foodie',
-    userAvatar: profile?.image_url || DEFAULT_AVATAR,
-    body: String(row.body || ''),
-    createdAt: String(row.created_at || ''),
-  }
-}
-
-export default function FeedPostCard({ post, currentUser, onPostChange, demoMode = false }: Props) {
+export default function FeedPostCard({ post, currentUser, onPostChange }: Props) {
   const [openComments, setOpenComments] = useState(false)
-  const [comments, setComments] = useState<FeedComment[]>(() => {
-    if (!demoMode || !post.commentCount) return []
-    return [{
-      id: `demo-sample-comment-${post.id}`,
-      reviewId: post.id,
-      userId: 'demo-commenter',
-      userName: 'Sara Ali',
-      userAvatar: DEFAULT_AVATAR,
-      body: 'This looks delicious! Adding it to my weekend list.',
-      createdAt: new Date().toISOString(),
-    }]
-  })
+  const [comments, setComments] = useState<FeedComment[]>([])
   const [draft, setDraft] = useState('')
   const [loadingComments, setLoadingComments] = useState(false)
   const [sending, setSending] = useState(false)
   const [liking, setLiking] = useState(false)
+  const [loginPrompt, setLoginPrompt] = useState(false)
+  const [actionMessage, setActionMessage] = useState('')
+  const signedIn = Boolean(currentUser.id)
 
   useEffect(() => {
-    if (!openComments || demoMode) return
-    let cancelled = false
-    setLoadingComments(true)
-    fetch(`/api/reviews/${post.id}/comments`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled) return
-        if (Array.isArray(data)) setComments(data.map(mapComment))
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingComments(false)
+    if (!openComments) return
+    let active = true
+    const supabase = createClient()
+    void supabase
+      .from('post_comments')
+      .select('id, post_id, user_id, body, created_at, profiles!post_comments_user_id_fkey(full_name, image_url, avatar_url)')
+      .eq('post_id', post.id)
+      .order('created_at', { ascending: true })
+      .limit(100)
+      .then(({ data, error }) => {
+        if (!active) return
+        if (error) {
+          console.error('Could not load post comments:', error)
+          setActionMessage('Comments could not be loaded right now.')
+          setLoadingComments(false)
+          return
+        }
+        setComments(((data || []) as unknown as CommentRow[]).map(mapComment))
+        if (active) setLoadingComments(false)
+      }, (error: unknown) => {
+        if (!active) return
+        console.error('Could not load post comments:', error)
+        setActionMessage('Comments could not be loaded right now.')
+        setLoadingComments(false)
       })
     return () => {
-      cancelled = true
+      active = false
     }
-  }, [openComments, post.id, demoMode])
+  }, [openComments, post.id])
 
   async function toggleLike() {
+    if (!signedIn) {
+      setLoginPrompt(true)
+      setActionMessage('')
+      return
+    }
     if (liking) return
+    setLiking(true)
+    setLoginPrompt(false)
+    setActionMessage('')
     const nextLiked = !post.likedByMe
     const optimistic = {
       ...post,
@@ -85,126 +105,97 @@ export default function FeedPostCard({ post, currentUser, onPostChange, demoMode
       likes: Math.max(0, post.likes + (nextLiked ? 1 : -1)),
     }
     onPostChange(optimistic)
-    if (demoMode) {
-      return
-    }
-    setLiking(true)
     try {
-      const res = await fetch(`/api/reviews/${post.id}/like`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not like')
-      onPostChange({
-        ...optimistic,
-        likedByMe: Boolean(data.liked),
-      })
-    } catch (err) {
+      const supabase = createClient()
+      const result = nextLiked
+        ? await supabase.from('post_likes').insert({ post_id: post.id, user_id: currentUser.id })
+        : await supabase.from('post_likes').delete().eq('post_id', post.id).eq('user_id', currentUser.id)
+      if (result.error) throw result.error
+      setActionMessage(nextLiked ? 'Post liked.' : 'Like removed.')
+    } catch (error) {
       onPostChange(post)
-      toast.error(err instanceof Error ? err.message : 'Could not like this review')
+      const message = error instanceof Error ? error.message : 'Could not update your like.'
+      setActionMessage(message)
+      toast.error(message)
     } finally {
       setLiking(false)
     }
   }
 
-  async function sendComment() {
+  async function sendComment(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     const body = draft.trim()
-    if (!body) return
-    if (demoMode) {
-      const comment: FeedComment = {
-        id: `demo-comment-${Date.now()}`,
-        reviewId: post.id,
-        userId: currentUser.id,
-        userName: currentUser.name,
-        userAvatar: currentUser.avatar,
-        body,
-        createdAt: new Date().toISOString(),
-      }
-      setComments((prev) => [...prev, comment])
-      setDraft('')
-      onPostChange({ ...post, commentCount: post.commentCount + 1 })
-      toast.success('Demo comment added')
+    if (!signedIn) {
+      setLoginPrompt(true)
       return
     }
+    if (!body || sending) return
     setSending(true)
+    setActionMessage('')
     try {
-      const res = await fetch(`/api/reviews/${post.id}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Could not comment')
-      const comment = mapComment(data)
-      setComments((prev) => [...prev, comment])
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('post_comments')
+        .insert({ post_id: post.id, user_id: currentUser.id, body })
+        .select('id, post_id, user_id, body, created_at, profiles!post_comments_user_id_fkey(full_name, image_url, avatar_url)')
+        .single()
+      if (error) throw error
+      setComments((current) => [...current, mapComment(data as unknown as CommentRow)])
       setDraft('')
       onPostChange({ ...post, commentCount: post.commentCount + 1 })
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not post comment')
+      setActionMessage('Comment posted.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not post your comment.'
+      setActionMessage(message)
+      toast.error(message)
     } finally {
       setSending(false)
     }
   }
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-sm">
-      <div className="flex items-center justify-between p-4 pb-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative w-10 h-10 rounded-full overflow-hidden bg-red-100 shrink-0">
-            <Image src={post.userAvatar} alt={post.userName} fill className="object-cover" />
-          </div>
+    <article id={`post-${post.id}`} className="overflow-hidden rounded-3xl border border-[var(--border)] bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 p-4 pb-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+            <Image src={post.userAvatar || DEFAULT_AVATAR} alt="" fill sizes="40px" className="object-cover" />
+          </span>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-base font-bold text-[var(--plum)]">{post.userName}</p>
-              {post.verified && (
-                <BadgeCheck size={14} className="text-red-600 shrink-0" aria-label="Verified review" />
-              )}
-            </div>
-            <p className="flex items-center gap-1 truncate text-sm text-[var(--muted)]">
-              <MapPin size={11} className="shrink-0" />
-              {post.restaurantName}
-              {post.offerName ? ` · ${post.offerName}` : ''}
-            </p>
+            <p className="truncate text-base font-bold text-[var(--plum)]">{post.userName}</p>
+            <p className="truncate text-sm text-[var(--muted)]">{post.restaurantName} · {post.restaurantCity || 'Pakistan'}</p>
           </div>
         </div>
-        <div className="text-right shrink-0">
-          {!post.image && (
-            <span role="img" aria-label={`Rated ${post.rating.toFixed(1)} out of 5`} className="text-sm font-bold text-[var(--plum)]">
-              <span aria-hidden="true" className="text-[var(--crimson)]">★ </span>{post.rating.toFixed(1)}
-            </span>
-          )}
-          <p className="text-sm text-[var(--muted)]">{formatDate(post.createdAt)}</p>
+        <div className="shrink-0 text-right">
+          <p aria-label={`Rated ${post.rating.toFixed(1)} out of 5`} className="inline-flex items-center gap-1 rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-sm font-bold text-[var(--plum)]">
+            <span aria-hidden="true" className="text-[var(--crimson)]">★</span> {post.rating.toFixed(1)}
+          </p>
+          <time className="block text-sm text-[var(--muted)]" dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>
         </div>
       </div>
 
       {post.image && (
-        <div className="relative aspect-[16/10] max-h-[28rem] overflow-hidden bg-gray-100">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+        <div className="relative aspect-[16/10] max-h-[28rem] overflow-hidden bg-[var(--surface-muted)]">
+          <Image
             src={post.image}
             alt={`Meal shared at ${post.restaurantName}`}
-            className="h-full w-full object-cover"
-            loading="lazy"
+            fill
+            sizes="(max-width: 768px) 100vw, 680px"
+            unoptimized
+            className="object-cover"
           />
-          <span
-            role="img"
-            aria-label={`Rated ${post.rating.toFixed(1)} out of 5`}
-            className="absolute right-3 top-3 inline-flex min-h-11 items-center gap-1 rounded-full bg-white px-3 text-sm font-bold text-[var(--plum)] shadow-md"
-          >
-            <span aria-hidden="true" className="text-[var(--crimson)]">★</span>
-            <span aria-hidden="true">{post.rating.toFixed(1)}</span>
-          </span>
         </div>
       )}
 
       <div className="space-y-3 p-4 pt-3">
-        <p className="text-base leading-relaxed text-[var(--foreground)]">{post.text}</p>
-
-        <div className="flex items-center justify-between gap-2 border-t border-[var(--border)] pt-1">
+        <p className="text-base leading-relaxed text-[var(--plum)]">{post.text}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[var(--border)] pt-1">
           <div className="flex items-center gap-2 text-[var(--muted)]">
             <button
               type="button"
-              onClick={toggleLike}
+              onClick={() => void toggleLike()}
               aria-pressed={post.likedByMe}
-              aria-label={`${post.likedByMe ? 'Unlike' : 'Like'} ${post.userName}'s review, ${post.likes} likes`}
+              aria-label={`${post.likedByMe ? 'Unlike' : 'Like'} ${post.userName}'s post, ${post.likes} likes`}
+              disabled={liking}
               className={`inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold ${
                 post.likedByMe ? 'text-[var(--crimson)]' : 'hover:text-[var(--crimson)]'
               }`}
@@ -214,64 +205,75 @@ export default function FeedPostCard({ post, currentUser, onPostChange, demoMode
             </button>
             <button
               type="button"
-              onClick={() => setOpenComments((open) => !open)}
+              onClick={() => {
+                if (!openComments) setLoadingComments(true)
+                setOpenComments((open) => !open)
+                if (!signedIn) setLoginPrompt(true)
+              }}
               aria-expanded={openComments}
+              aria-controls={`post-comments-${post.id}`}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold hover:text-[var(--crimson)]"
             >
               <MessageCircle aria-hidden="true" size={18} />
               {post.commentCount > 0 ? post.commentCount : 'Comment'}
             </button>
           </div>
-          <Link href="/user/offers" className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-bold text-[var(--crimson)] hover:underline">
-            Browse offers <span aria-hidden="true">→</span>
-          </Link>
+          {post.restaurantId && (
+            <Link href={`/user/offers#restaurant/${encodeURIComponent(post.restaurantId)}`} className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-[var(--crimson)] hover:underline">
+              Explore restaurant <span aria-hidden="true">→</span>
+            </Link>
+          )}
         </div>
 
+        {loginPrompt && (
+          <p role="status" className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm text-[var(--plum)]">
+            Sign in to like or comment.{' '}
+            <Link href="/auth/login?next=%2Fuser%2Ffoodies-feed" className="font-semibold text-[var(--crimson)] underline underline-offset-2">Login</Link>
+            {' '}or{' '}
+            <Link href="/auth/signup" className="font-semibold text-[var(--crimson)] underline underline-offset-2">sign up</Link>.
+          </p>
+        )}
+        <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">{actionMessage}</p>
+
         {openComments && (
-          <div className="space-y-3 pt-1">
-            {loadingComments && <p className="text-xs text-gray-400">Loading comments…</p>}
+          <div id={`post-comments-${post.id}`} className="space-y-3 pt-1">
+            {loadingComments && <p className="text-sm text-[var(--muted)]">Loading comments…</p>}
             {!loadingComments && comments.length === 0 && (
-              <p className="text-xs text-gray-400">Be the first to comment on this review.</p>
+              <p className="text-sm text-[var(--muted)]">Be the first to comment on this post.</p>
             )}
             {comments.map((comment) => (
               <div key={comment.id} className="flex gap-2">
-                <div className="relative w-7 h-7 rounded-full overflow-hidden bg-red-50 shrink-0">
-                  <Image src={comment.userAvatar} alt={comment.userName} fill className="object-cover" />
-                </div>
-                <div className="bg-gray-50 rounded-2xl px-3 py-2 min-w-0 flex-1">
-                  <p className="text-[11px] font-bold text-gray-800">{comment.userName}</p>
-                  <p className="text-xs text-gray-700">{comment.body}</p>
+                <span className="relative h-8 w-8 shrink-0 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+                  <Image src={comment.userAvatar} alt="" fill sizes="32px" className="object-cover" />
+                </span>
+                <div className="min-w-0 flex-1 rounded-2xl bg-[var(--surface-muted)] px-3 py-2">
+                  <p className="text-sm font-bold text-[var(--plum)]">{comment.userName}</p>
+                  <p className="text-sm text-[var(--plum)]">{comment.body}</p>
+                  <time className="text-xs text-[var(--muted)]" dateTime={comment.createdAt}>{formatDate(comment.createdAt)}</time>
                 </div>
               </div>
             ))}
-            <div className="flex items-center gap-2">
-              <div className="relative w-7 h-7 rounded-full overflow-hidden bg-red-50 shrink-0">
-                <Image src={currentUser.avatar} alt="You" fill className="object-cover" />
-              </div>
-              <input
-                type="text"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                aria-label={`Comment on ${post.userName}'s review`}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    void sendComment()
-                  }
-                }}
-                placeholder="Write a comment…"
-                className="flex-1 rounded-full border border-gray-200 px-3 py-2 text-xs"
-              />
-              <button
-                type="button"
-                onClick={() => void sendComment()}
-                disabled={sending || !draft.trim()}
-                className="text-red-600 disabled:text-gray-300"
-                aria-label="Send comment"
-              >
-                <Send size={16} />
-              </button>
-            </div>
+            {signedIn ? (
+              <form onSubmit={sendComment} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={draft}
+                  onChange={(event) => setDraft(event.target.value)}
+                  aria-label={`Comment on ${post.userName}'s post`}
+                  maxLength={1000}
+                  placeholder="Write a comment…"
+                  className="esr-auth-input min-h-11 min-w-0 flex-1 rounded-full px-4 text-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={sending || !draft.trim()}
+                  className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[var(--crimson)] disabled:opacity-50"
+                  aria-label="Send comment"
+                >
+                  <Send aria-hidden="true" size={18} />
+                </button>
+              </form>
+            ) : null}
           </div>
         )}
       </div>

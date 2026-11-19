@@ -1,12 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { format } from 'date-fns'
 import LiveRefresh from '@/components/admin/LiveRefresh'
-import { generateEsrVoucherCode } from '@/lib/esr-voucher-code'
 
 type VoucherRow = {
   id: string
   used_at: string
-  offer_id: string
   profiles: { full_name: string | null; email: string | null } | null
   coupons: { code: string | null } | null
   offers: { name: string; discounted_price: number; restaurants: { name: string } | null } | null
@@ -19,7 +17,7 @@ export default async function AdminVouchersPage() {
   const { data } = await supabase
     .from('user_coupons')
     .select(
-      'id, used_at, offer_id, profiles(full_name, email), coupons(code), offers(name, discounted_price, restaurants(name))'
+      'id, used_at, profiles(full_name, email), coupons(code), offers(name, discounted_price, restaurants(name))'
     )
     .order('used_at', { ascending: false })
     .limit(300)
@@ -30,7 +28,7 @@ export default async function AdminVouchersPage() {
     <div>
       <h1 className="text-2xl font-black text-gray-900 mb-2">Claimed Vouchers</h1>
       <LiveRefresh />
-      <p className="text-sm text-gray-500 mb-6">Redemptions from the website. Codes are ESR- plus 5 digits and refresh every 30 minutes.</p>
+      <p className="text-sm text-gray-500 mb-6">Redemptions and voucher codes from the active coupon records.</p>
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -65,7 +63,7 @@ export default async function AdminVouchersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="font-mono text-xs font-bold bg-red-50 text-red-700 px-2 py-1 rounded-lg">
-                        {generateEsrVoucherCode(row.offer_id) || row.coupons?.code || '—'}
+                        {row.coupons?.code || '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-xs text-gray-400">

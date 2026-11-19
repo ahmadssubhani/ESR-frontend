@@ -8,7 +8,7 @@ import AuthPageShell from '@/components/auth/AuthPageShell'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { ButtonLoader } from '@/components/ui/loader'
-import { startDemoSession, type DemoRole } from '@/lib/demo-session'
+import { authCallbackUrl, friendlyAuthError, roleHome } from '@/lib/auth-routing'
 
 function LoginForm() {
   const router = useRouter()
@@ -20,14 +20,6 @@ function LoginForm() {
   const [error, setError] = useState(() => errorParam || '')
   const [status, setStatus] = useState(() => errorParam ? `Error: ${errorParam}` : '')
   const [passwordMode, setPasswordMode] = useState(false)
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false'
-
-  function enterDemo(role: DemoRole) {
-    startDemoSession(role)
-    toast.success(`${role} demo opened. No sign-in or database needed.`)
-    router.push(role === 'Diner' ? '/user/offers' : '/demo/workspace')
-  }
-
   useEffect(() => {
     if (errorParam) {
       toast.error(errorParam)
@@ -36,45 +28,44 @@ function LoginForm() {
 
   async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (demoMode) {
-      enterDemo('Diner')
-      return
-    }
     setLoading(true)
     setError('')
     setStatus('')
     const supabase = createClient()
-    const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password })
     if (loginError) {
-      setError(loginError.message)
-      setStatus(`Error: ${loginError.message}`)
-      toast.error(loginError.message)
+      const message = friendlyAuthError(loginError.message)
+      setError(message)
+      setStatus(`Error: ${message}`)
+      toast.error(message)
       setLoading(false)
       return
     }
     toast.success('Signed in successfully')
-    router.push('/user/offers')
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .maybeSingle()
+    router.push(roleHome(profile?.role, searchParams.get('next')))
     router.refresh()
   }
 
   async function handleEmailLink(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (demoMode) {
-      enterDemo('Diner')
-      return
-    }
     setLoading(true)
     setError('')
     setStatus('')
     const supabase = createClient()
     const { error: linkError } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { emailRedirectTo: authCallbackUrl(window.location.origin, searchParams.get('next')) },
     })
     if (linkError) {
-      setError(linkError.message)
-      setStatus(`Error: ${linkError.message}`)
-      toast.error(linkError.message)
+      const message = friendlyAuthError(linkError.message)
+      setError(message)
+      setStatus(`Error: ${message}`)
+      toast.error(message)
       setLoading(false)
       return
     }
@@ -85,10 +76,6 @@ function LoginForm() {
   }
 
   async function handleGoogle() {
-    if (demoMode) {
-      enterDemo('Diner')
-      return
-    }
     setLoading(true)
     setError('')
     setStatus('')
@@ -98,13 +85,13 @@ function LoginForm() {
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: authCallbackUrl(window.location.origin, searchParams.get('next')),
           scopes: 'email profile',
         },
       })
       if (oauthError) throw oauthError
     } catch (oauthError) {
-      const message = oauthError instanceof Error ? oauthError.message : 'Failed to sign in with Google.'
+      const message = friendlyAuthError(oauthError instanceof Error ? oauthError.message : 'Failed to sign in with Google.')
       setError(message)
       setStatus(`Error: ${message}`)
       toast.error(message)
@@ -119,11 +106,6 @@ function LoginForm() {
       size="wide"
     >
         <section aria-label="Sign in to ESR" className="esr-card space-y-6 p-6 sm:p-8">
-          {demoMode && (
-            <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-center text-sm font-medium text-[var(--plum)]">
-              Interactive demo · email delivery and Google sign-in are simulated.
-            </p>
-          )}
           <form onSubmit={passwordMode ? handleLogin : handleEmailLink} className="space-y-4">
             {error && (
               <p id="auth-error" role="alert" className="flex items-start gap-2 rounded-xl border border-[var(--crimson)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-medium text-[var(--plum)]">
@@ -213,28 +195,6 @@ function LoginForm() {
             </svg>
             {loading ? <ButtonLoader label="Signing in…" /> : 'Continue with Google'}
           </button>
-
-          {demoMode && (
-            <div className="space-y-3">
-              <p className="text-center text-sm font-semibold text-[var(--muted)]">Or explore a sample account</p>
-              <div className="grid grid-cols-1 gap-2 min-[520px]:grid-cols-3">
-                {([
-                  ['Diner', 'Diner preview ↗'],
-                  ['Admin', 'Admin preview ↗'],
-                  ['Restaurant', 'Restaurant preview ↗'],
-                ] as const).map(([role, label]) => (
-                  <button
-                    key={role}
-                    type="button"
-                    onClick={() => enterDemo(role)}
-                    className="esr-outline-button min-h-11 whitespace-nowrap rounded-xl px-3 text-sm font-semibold hover:bg-[var(--surface-muted)]"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 text-sm leading-6 text-[var(--plum)]">
             Restaurant teams: use the email address registered by your ESR admin. Restaurant access is always through an email sign-in link.

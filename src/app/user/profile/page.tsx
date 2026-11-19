@@ -1,50 +1,64 @@
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { ensureUserProfile } from '@/lib/ensure-profile'
 import ProfileClient from '@/components/user/ProfileClient'
-import { DEMO_USER } from '@/lib/demo-data'
 
-export default async function ProfilePage() {
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false'
-  if (demoMode) {
-    return (
-      <ProfileClient
-        profile={{
-          id: DEMO_USER.id,
-          full_name: DEMO_USER.name,
-          email: 'ayesha@example.com',
-          image_url: DEMO_USER.avatar,
-          avatar_url: DEMO_USER.avatar,
-        }}
-        reviews={[]}
-        redemptions={[]}
-        demoMode
-      />
-    )
-  }
+type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
+export default async function ProfilePage({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    return (
-      <ProfileClient profile={null} reviews={[]} redemptions={[]} demoMode />
-    )
-  }
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError) throw new Error(`Could not load your account: ${authError.message}`)
+  if (!user) redirect('/auth/login?next=%2Fuser%2Fprofile')
 
-  const [{ data: profile }, { data: reviews }, { data: redemptions }] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).single(),
-    supabase.from('reviews').select('*, restaurants(name), offers(name), review_images(image_url)').eq('user_id', user.id).order('created_at', { ascending: false }),
-    supabase.from('user_coupons').select('*, offers(name, restaurants(name))').eq('user_id', user.id).order('used_at', { ascending: false }),
-  ])
+  await ensureUserProfile(user)
+  const [{ data: profile, error: profileError }, { data: reviews, error: reviewsError }, { data: redemptions, error: redemptionError }, { data: views, error: viewsError }] =
+    await Promise.all([
+      supabase
+        .from('profiles')
+        .select('full_name, phone, email, image_url, avatar_url')
+        .eq('id', user.id)
+        .single(),
+      supabase
+        .from('reviews')
+        .select('id, user_id, created_at, rating_overall, comment, restaurants(name)')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('user_coupons')
+        .select('id, used_at, offers(name, restaurants(name))')
+        .eq('user_id', user.id)
+        .order('used_at', { ascending: false }),
+      supabase
+        .from('restaurant_views')
+        .select('id, viewed_at, restaurants(name, city)')
+        .eq('user_id', user.id)
+        .order('viewed_at', { ascending: false })
+        .limit(30),
+    ])
 
-  const mappedProfile = profile
-    ? {
-        id: profile.id,
-        full_name: profile.full_name ?? undefined,
-        phone: profile.phone ?? undefined,
-        email: user?.email ?? undefined,
-        image_url: profile.image_url ?? undefined,
-        avatar_url: profile.image_url ?? undefined,
-      }
-    : null
+  const queryError = profileError || reviewsError || redemptionError || viewsError
+  if (queryError) throw new Error(`Could not load account data: ${queryError.message}`)
 
-  return <ProfileClient profile={mappedProfile} reviews={reviews || []} redemptions={redemptions || []} />
+  const params = await searchParams
+  const requestedTab = Array.isArray(params.tab) ? params.tab[0] : params.tab
+  const initialTab = requestedTab === 'reviews' || requestedTab === 'history' ? requestedTab : 'profile'
+  const fullName = profile?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || ''
+
+  return (
+    <ProfileClient
+      profile={{
+        id: user.id,
+        full_name: fullName,
+        phone: profile?.phone || '',
+        email: user.email || profile?.email || '',
+        avatar_url: profile?.avatar_url || profile?.image_url || null,
+        emailConfirmed: Boolean(user.email_confirmed_at),
+      }}
+      reviews={reviews || []}
+      redemptions={redemptions || []}
+      views={views || []}
+      initialTab={initialTab}
+    />
+  )
 }

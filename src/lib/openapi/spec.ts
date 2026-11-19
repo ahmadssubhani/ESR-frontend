@@ -499,10 +499,6 @@ export const openApiDocument = {
         parameters: [{ name: 'offerId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       }),
     },
-    '/api/feed/stories': {
-      ...op('Foodie stories feed', { method: 'GET', tags: ['Feed'], security: publicSec }),
-      ...op('Post story', { method: 'POST', tags: ['Feed'], security: bearer }),
-    },
     '/api/ads': {
       ...op('Active ads', { method: 'GET', tags: ['Ads'], security: publicSec }),
       ...op('Create ad', { method: 'POST', tags: ['Ads'], security: bearer, admin: true }),
@@ -536,7 +532,7 @@ export const openApiDocument = {
                 type: 'object',
                 properties: {
                   user_id: { type: 'string', format: 'uuid' },
-                  role: { type: 'string', enum: ['customer', 'owner', 'admin'] },
+                  role: { type: 'string', enum: ['user', 'restaurant', 'admin'] },
                   restaurant_id: { type: 'string', format: 'uuid' },
                 },
               },

@@ -1,26 +1,3 @@
-export type FeedStory = {
-  id: string
-  userId: string
-  name: string
-  avatar: string
-  hasNew?: boolean
-  mediaUrl?: string
-  mediaType: 'image' | 'video' | 'embed'
-  caption?: string
-  source: 'esr' | 'instagram' | 'facebook'
-  externalUrl?: string
-  embedUrl?: string
-  createdAt: string
-}
-
-export type StoryGroup = {
-  userId: string
-  name: string
-  avatar: string
-  hasNew: boolean
-  items: FeedStory[]
-}
-
 export type FeedPost = {
   id: string
   userId?: string
@@ -28,6 +5,7 @@ export type FeedPost = {
   userAvatar: string
   restaurantId?: string
   restaurantName: string
+  restaurantCity?: string | null
   offerName?: string
   rating: number
   text: string
@@ -41,7 +19,7 @@ export type FeedPost = {
 
 export type FeedComment = {
   id: string
-  reviewId: string
+  postId: string
   userId: string
   userName: string
   userAvatar: string

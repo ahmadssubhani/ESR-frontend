@@ -1,326 +1,499 @@
 'use client'
 
-import { useRef, useState } from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Camera, Check, Mail, Shield, Star, Trash2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { Camera, Shield, Check, Mail, Phone } from 'lucide-react'
 import { toast } from 'sonner'
 import { ButtonLoader } from '@/components/ui/loader'
+
+type ProfileReview = {
+  id: string
+  created_at: string
+  rating_overall: number | null
+  comment: string | null
+  user_id: string | null
+  restaurants: { name: string | null } | null
+}
+
+type Redemption = {
+  id: string
+  used_at: string
+  offers: { name: string | null; restaurants: { name: string | null } | null } | null
+}
+
+type RestaurantView = {
+  id: number
+  viewed_at: string
+  restaurants: { name: string | null; city: string | null } | null
+}
+
+type Tab = 'profile' | 'reviews' | 'history'
 
 interface ProfileProps {
   profile: {
     id: string
-    full_name?: string
-    phone?: string
-    email?: string
-    image_url?: string
-    avatar_url?: string
-  } | null
-  reviews: any[]
-  redemptions: any[]
-  demoMode?: boolean
+    full_name: string
+    phone: string
+    email: string
+    avatar_url: string | null
+    emailConfirmed: boolean
+  }
+  reviews: ProfileReview[]
+  redemptions: Redemption[]
+  views: RestaurantView[]
+  initialTab?: Tab
 }
 
-export default function ProfileClient({ profile, reviews = [], redemptions = [], demoMode = false }: ProfileProps) {
+const AVATAR_LIMIT = 2 * 1024 * 1024
+const AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
+
+function dateLabel(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? 'Date unavailable'
+    : date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+export default function ProfileClient({
+  profile,
+  reviews: initialReviews,
+  redemptions,
+  views,
+  initialTab = 'profile',
+}: ProfileProps) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'profile' | 'reviews' | 'history'>('profile')
-  const [fullName, setFullName] = useState(profile?.full_name || '')
-  const [phone, setPhone] = useState(profile?.phone || '')
-  const [email] = useState(profile?.email || '')
-  const pendingAvatarFile = useRef<File | null>(null)
+  const avatarInput = useRef<HTMLInputElement>(null)
+  const pendingAvatar = useRef<File | null>(null)
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab)
+  const [fullName, setFullName] = useState(profile.full_name)
+  const [phone, setPhone] = useState(profile.phone)
+  const [avatarUrl, setAvatarUrl] = useState(profile.avatar_url)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+  const [reviews, setReviews] = useState(initialReviews)
+  const [saving, setSaving] = useState(false)
+  const [reviewSaving, setReviewSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
+  const [saveError, setSaveError] = useState('')
+  const [editingReview, setEditingReview] = useState<string | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editRating, setEditRating] = useState(5)
 
-  const [avatarUrl, setAvatarUrl] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('user_avatar') || profile?.image_url || profile?.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'
+  function chooseAvatar(file: File | undefined) {
+    if (!file) return
+    if (!AVATAR_TYPES.includes(file.type) || file.size > AVATAR_LIMIT) {
+      setSaveError('Choose a JPG, PNG, WebP, or AVIF photo smaller than 2 MB.')
+      return
     }
-    return profile?.image_url || profile?.avatar_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'
-  })
-
-  const [isSaving, setIsSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const [saveError, setSaveError] = useState<string | null>(null)
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      pendingAvatarFile.current = file
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const result = reader.result as string
-        setAvatarUrl(result)
-      }
-      reader.readAsDataURL(file)
-    }
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+    const preview = URL.createObjectURL(file)
+    pendingAvatar.current = file
+    setAvatarPreview(preview)
+    setAvatarUrl(preview)
+    setSaveError('')
   }
 
-  const handleSaveChanges = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSaving(true)
-    setSaveError(null)
-    setSaveSuccess(false)
-
+  async function saveProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSaving(true)
+    setSaveError('')
+    setSaveMessage('')
     try {
-      if (demoMode) {
-        localStorage.setItem('user_name', fullName)
-        localStorage.setItem('user_phone', phone)
-        if (avatarUrl) localStorage.setItem('user_avatar', avatarUrl)
-        window.dispatchEvent(new Event('user-avatar-changed'))
-        setSaveSuccess(true)
-        toast.success('Demo profile saved in this browser')
-        return
-      }
-
-      let nextImageUrl = profile?.image_url || profile?.avatar_url || null
-      const file = pendingAvatarFile.current
-
+      const supabase = createClient()
+      let nextAvatarUrl = profile.avatar_url
+      const file = pendingAvatar.current
       if (file) {
-        const supabase = createClient()
-        const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-        const path = `avatars/${profile?.id || 'user'}/${Date.now()}.${ext}`
+        const extension = file.type.split('/')[1] || 'jpg'
+        const path = `${profile.id}/${crypto.randomUUID()}.${extension}`
         const { data: uploaded, error: uploadError } = await supabase.storage
-          .from('review-images')
-          .upload(path, file, { upsert: true, contentType: file.type || 'image/jpeg' })
-
-        if (uploadError || !uploaded) {
-          throw new Error(uploadError?.message || 'Failed to upload profile picture')
-        }
-
-        const { data: { publicUrl } } = supabase.storage.from('review-images').getPublicUrl(path)
-        nextImageUrl = publicUrl
-      } else if (avatarUrl && !avatarUrl.startsWith('data:')) {
-        nextImageUrl = avatarUrl
+          .from('avatars')
+          .upload(path, file, { upsert: false, contentType: file.type })
+        if (uploadError) throw new Error(uploadError.message)
+        const { data } = supabase.storage.from('avatars').getPublicUrl(uploaded.path)
+        nextAvatarUrl = data.publicUrl
       }
 
-      const res = await fetch('/api/profile', {
+      const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          full_name: fullName,
-          phone,
-          image_url: nextImageUrl,
-        }),
+        body: JSON.stringify({ full_name: fullName.trim(), phone: phone.trim(), avatar_url: nextAvatarUrl }),
       })
-
-      const payload = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(payload.error || 'Failed to update profile')
+      const result: unknown = await response.json().catch(() => null)
+      if (!response.ok) {
+        const message =
+          result && typeof result === 'object' && 'error' in result
+            ? String(result.error)
+            : 'Profile could not be updated.'
+        throw new Error(message)
       }
 
-      const savedImageUrl = payload.image_url || nextImageUrl
-      if (savedImageUrl) {
-        setAvatarUrl(savedImageUrl)
-        localStorage.setItem('user_avatar', savedImageUrl)
-      }
-      localStorage.setItem('user_name', fullName)
-      localStorage.setItem('user_phone', phone)
-      pendingAvatarFile.current = null
-      window.dispatchEvent(new Event('user-avatar-changed'))
-
-      setSaveSuccess(true)
+      pendingAvatar.current = null
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview)
+      setAvatarPreview(null)
+      setAvatarUrl(nextAvatarUrl)
+      setSaveMessage('Profile updated')
       toast.success('Profile updated')
       router.refresh()
-      setTimeout(() => setSaveSuccess(false), 2500)
     } catch (error) {
-      console.error('Error updating profile:', error)
-      const message = error instanceof Error ? error.message : 'Failed to update profile'
+      const message = error instanceof Error ? error.message : 'Profile could not be updated.'
       setSaveError(message)
       toast.error(message)
     } finally {
-      setIsSaving(false)
+      setSaving(false)
     }
   }
 
+  async function signOut() {
+    const supabase = createClient()
+    const { error } = await supabase.auth.signOut()
+    if (error) {
+      setSaveError(error.message)
+      toast.error('Could not sign out. Please try again.')
+      return
+    }
+    router.push('/user/offers#discover')
+    router.refresh()
+  }
+
+  function startEdit(review: ProfileReview) {
+    setEditingReview(review.id)
+    setEditText(review.comment || '')
+    setEditRating(Number(review.rating_overall) || 5)
+  }
+
+  async function saveReview(reviewId: string) {
+    setReviewSaving(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('reviews')
+        .update({ comment: editText.trim(), rating_overall: editRating })
+        .eq('id', reviewId)
+        .eq('user_id', profile.id)
+      if (error) throw error
+      setReviews((current) =>
+        current.map((review) =>
+          review.id === reviewId
+            ? { ...review, comment: editText.trim(), rating_overall: editRating }
+            : review
+        )
+      )
+      setEditingReview(null)
+      toast.success('Review updated')
+    } catch (error) {
+      console.error('Could not update review:', error)
+      toast.error(error instanceof Error ? error.message : 'Review could not be updated.')
+    } finally {
+      setReviewSaving(false)
+    }
+  }
+
+  async function deleteReview(reviewId: string) {
+    setReviewSaving(true)
+    try {
+      const supabase = createClient()
+      const { error } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId)
+        .eq('user_id', profile.id)
+      if (error) throw error
+      setReviews((current) => current.filter((review) => review.id !== reviewId))
+      toast.success('Review deleted')
+    } catch (error) {
+      console.error('Could not delete review:', error)
+      toast.error(error instanceof Error ? error.message : 'Review could not be deleted.')
+    } finally {
+      setReviewSaving(false)
+    }
+  }
+
+  function handleTabKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const tabs: Tab[] = ['profile', 'reviews', 'history']
+    const currentIndex = tabs.indexOf(activeTab)
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? tabs.length - 1
+        : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length
+    setActiveTab(tabs[nextIndex])
+    document.getElementById(`account-tab-${tabs[nextIndex]}`)?.focus()
+  }
+
+  const tabLabels: Record<Tab, string> = {
+    profile: 'Profile',
+    reviews: `Reviews (${reviews.length})`,
+    history: `History (${redemptions.length + views.length})`,
+  }
+  const memberText = profile.emailConfirmed ? 'ESR Verified Foodie Member' : 'ESR Foodie Member'
+
   return (
-    <div className="relative min-h-screen w-full px-4 py-6 space-y-6">
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none opacity-30">
+    <div className="relative isolate min-h-[calc(100vh-4rem)] overflow-hidden px-4 py-8 sm:py-12">
+      <div aria-hidden="true" className="fixed inset-0 -z-10 bg-[var(--background)]">
         <Image
-          src="https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1920&q=90"
-          alt="Background Texture"
+          src="/images/account-cafe-optimized.webp"
+          alt=""
           fill
+          sizes="100vw"
+          loading="lazy"
           className="object-cover"
-          priority
         />
+        <div className="absolute inset-0 bg-[var(--background)]/[0.88]" />
       </div>
 
-      <div className="relative z-10 max-w-4xl mx-auto space-y-6">
-        <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-red-100 p-6 shadow-md flex flex-col sm:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-5">
-            <div className="relative group w-20 h-20 rounded-full overflow-hidden border-3 border-red-600 bg-red-950 shrink-0 shadow-md">
-              <Image
-                src={avatarUrl}
-                alt="Profile Picture"
-                fill
-                unoptimized={avatarUrl.startsWith('data:') || avatarUrl.includes('supabase.co')}
-                className="object-cover brightness-95 contrast-110"
+      <div className="mx-auto max-w-[860px] space-y-5">
+        <section className="esr-card flex flex-col gap-5 rounded-3xl p-5 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-[var(--crimson)] bg-[var(--surface-muted)]">
+              {avatarUrl ? (
+                <Image src={avatarUrl} alt="" fill sizes="80px" unoptimized className="object-cover" />
+              ) : (
+                <span aria-hidden="true" className="flex h-full w-full items-center justify-center text-3xl font-semibold text-[var(--crimson)]">
+                  {fullName.charAt(0).toUpperCase() || 'E'}
+                </span>
+              )}
+              <button
+                type="button"
+                aria-label="Change profile photo"
+                onClick={() => avatarInput.current?.click()}
+                className="absolute bottom-0 right-0 inline-flex h-11 w-11 items-center justify-center rounded-full border border-white bg-[var(--crimson)] text-white shadow-sm"
+              >
+                <Camera aria-hidden="true" size={18} />
+              </button>
+              <input
+                ref={avatarInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/avif"
+                className="sr-only"
+                onChange={(event) => {
+                  chooseAvatar(event.target.files?.[0])
+                  event.target.value = ''
+                }}
               />
-              <label className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                <Camera size={20} />
-                <span className="text-[10px] font-extrabold mt-0.5">Change</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
             </div>
-
-            <div>
-              <h1 className="text-xl font-black text-gray-900">{fullName || 'Your Profile'}</h1>
-              <p className="text-xs text-red-600 font-bold mt-0.5 flex items-center gap-1">
-                <Shield size={13} /> ESR Verified Foodie Member
+            <div className="min-w-0">
+              <h1 id="account-title" className="esr-serif truncate text-2xl text-[var(--plum)] sm:text-3xl">
+                {fullName || 'Your account'}
+              </h1>
+              <p className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[var(--crimson)]">
+                <Shield aria-hidden="true" size={16} /> {memberText}
               </p>
             </div>
           </div>
-
-          <a
-            href="/auth/signout"
-            className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl transition-colors border border-red-200"
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] px-5 text-sm font-semibold text-[var(--plum)] hover:bg-[var(--surface-soft)]"
           >
             Sign out
-          </a>
-        </div>
-
-        <div className="bg-white/95 backdrop-blur-md p-1.5 rounded-2xl border border-red-100 shadow-sm flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${
-              activeTab === 'profile' ? 'bg-red-600 text-white shadow-md' : 'text-gray-600 hover:bg-red-50'
-            }`}
-          >
-            Profile
           </button>
-          <button
-            onClick={() => setActiveTab('reviews')}
-            className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${
-              activeTab === 'reviews' ? 'bg-red-600 text-white shadow-md' : 'text-gray-600 hover:bg-red-50'
-            }`}
+        </section>
+
+        <section className="esr-card rounded-3xl p-3 sm:p-5">
+          <div
+            role="tablist"
+            aria-label="Account sections"
+            onKeyDown={handleTabKeyDown}
+            className="flex gap-2 overflow-x-auto rounded-full bg-[var(--surface-muted)] p-1"
           >
-            Reviews ({reviews.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 py-3 text-xs font-black rounded-xl transition-all ${
-              activeTab === 'history' ? 'bg-red-600 text-white shadow-md' : 'text-gray-600 hover:bg-red-50'
-            }`}
-          >
-            History ({redemptions.length})
-          </button>
-        </div>
-
-        {activeTab === 'profile' && (
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-red-100 p-6 shadow-md space-y-6">
-            <form onSubmit={handleSaveChanges} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-3 bg-red-50/50 border border-red-200 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300 text-gray-800"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5">
-                  <Mail size={13} className="text-red-600" />
-                  <span>Email Address</span>
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  disabled
-                  className="w-full px-4 py-3 bg-gray-100 border border-gray-200 rounded-2xl text-xs font-medium text-gray-500 cursor-not-allowed"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-700 mb-1 flex items-center gap-1.5">
-                  <Phone size={13} className="text-red-600" />
-                  <span>Phone Number</span>
-                </label>
-                <input
-                  type="text"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-4 py-3 bg-red-50/50 border border-red-200 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300 text-gray-800"
-                />
-              </div>
-
-              {saveError && (
-                <p className="text-xs font-semibold text-red-600 text-center">{saveError}</p>
-              )}
-
-              <div className="pt-3 flex justify-center">
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="w-full sm:w-64 py-3.5 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-70"
-                >
-                  {isSaving ? (
-                    <ButtonLoader label="Saving…" />
-                  ) : saveSuccess ? (
-                    <>
-                      <Check size={16} className="text-white" />
-                      <span>Updated Successfully!</span>
-                    </>
-                  ) : (
-                    <span>Save Changes</span>
-                  )}
-                </button>
-              </div>
-            </form>
+            {(['profile', 'reviews', 'history'] as const).map((tab) => (
+              <button
+                key={tab}
+                id={`account-tab-${tab}`}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                aria-controls={`account-panel-${tab}`}
+                tabIndex={activeTab === tab ? 0 : -1}
+                onClick={() => setActiveTab(tab)}
+                className={`min-h-11 flex-1 whitespace-nowrap rounded-full px-3 text-sm font-semibold transition-colors ${
+                  activeTab === tab
+                    ? 'bg-[var(--crimson)] text-white'
+                    : 'text-[var(--plum)] hover:bg-white'
+                }`}
+              >
+                {tabLabels[tab]}
+              </button>
+            ))}
           </div>
-        )}
 
-        {activeTab === 'reviews' && (
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-red-100 p-6 shadow-md space-y-4">
-            <h2 className="text-sm font-extrabold text-gray-900">Your Submitted Reviews</h2>
-            {reviews.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 text-xs font-semibold bg-red-50/30 rounded-2xl border border-dashed border-red-200">
-                You haven&apos;t written any reviews yet.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {reviews.map((rev: any, idx: number) => (
-                  <div key={idx} className="p-4 border border-red-100 rounded-2xl space-y-2 bg-red-50/20">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-red-600">{rev.restaurants?.name}</span>
-                      <span className="text-xs text-amber-500 font-bold">★ {rev.rating}.0</span>
-                    </div>
-                    <p className="text-xs text-gray-700">{rev.review_text}</p>
+          <div
+            id={`account-panel-${activeTab}`}
+            role="tabpanel"
+            aria-labelledby={`account-tab-${activeTab}`}
+            tabIndex={0}
+            className="pt-5"
+          >
+            {activeTab === 'profile' && (
+              <form onSubmit={saveProfile} className="mx-auto max-w-xl space-y-5">
+                <div>
+                  <label htmlFor="account-full-name" className="mb-2 block text-sm font-semibold text-[var(--plum)]">Full Name</label>
+                  <input
+                    id="account-full-name"
+                    type="text"
+                    autoComplete="name"
+                    value={fullName}
+                    onChange={(event) => setFullName(event.target.value)}
+                    required
+                    maxLength={120}
+                    className="esr-auth-input min-h-12 w-full rounded-[14px] px-4 text-base"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="account-email" className="mb-2 block text-sm font-semibold text-[var(--plum)]">Email Address</label>
+                  <div className="relative">
+                    <Mail aria-hidden="true" size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--plum)]" />
+                    <input
+                      id="account-email"
+                      type="email"
+                      value={profile.email}
+                      readOnly
+                      aria-readonly="true"
+                      aria-describedby="account-email-help"
+                      className="esr-auth-input min-h-12 w-full rounded-[14px] bg-[var(--surface-muted)] pl-11 pr-4 text-base"
+                    />
                   </div>
+                  <p id="account-email-help" className="mt-1 text-sm text-[var(--muted)]">Email can&apos;t be changed here</p>
+                </div>
+                <div>
+                  <label htmlFor="account-phone" className="mb-2 block text-sm font-semibold text-[var(--plum)]">Phone Number</label>
+                  <input
+                    id="account-phone"
+                    type="tel"
+                    autoComplete="tel"
+                    placeholder="+92 300 1234567"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    maxLength={32}
+                    className="esr-auth-input min-h-12 w-full rounded-[14px] px-4 text-base"
+                  />
+                </div>
+                {saveError && <p role="alert" className="rounded-xl bg-[var(--surface-muted)] p-3 text-sm font-medium text-[var(--plum)]">Error: {saveError}</p>}
+                <p role="status" aria-live="polite" aria-atomic="true" className="min-h-6 text-center text-sm font-semibold text-[var(--crimson)]">
+                  {saveMessage}
+                </p>
+                <div className="flex justify-center">
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="esr-primary-button inline-flex min-h-12 min-w-60 items-center justify-center gap-2 rounded-full px-6 text-base font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {saving ? <ButtonLoader label="Saving changes…" /> : <><Check aria-hidden="true" size={18} /> Save changes</>}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {activeTab === 'reviews' && (
+              <section aria-label="Your reviews" className="space-y-4">
+                {reviews.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center">
+                    <p className="text-base text-[var(--plum)]">You haven&apos;t reviewed anything yet.</p>
+                    <Link href="/user/offers" className="mt-3 inline-flex min-h-11 items-center text-sm font-semibold text-[var(--crimson)] underline underline-offset-2">
+                      Explore restaurants →
+                    </Link>
+                  </div>
+                ) : reviews.map((review) => (
+                  <article key={review.id} className="rounded-2xl border border-[var(--border)] bg-white p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 className="esr-serif text-xl text-[var(--plum)]">{review.restaurants?.name || 'Restaurant'}</h2>
+                        <time className="mt-1 block text-sm text-[var(--muted)]" dateTime={review.created_at}>{dateLabel(review.created_at)}</time>
+                      </div>
+                      <span aria-label={`Rated ${Number(review.rating_overall || 0).toFixed(1)} out of 5`} className="inline-flex min-h-9 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-3 text-sm font-bold text-[var(--plum)]">
+                        <Star aria-hidden="true" size={15} fill="currentColor" /> {Number(review.rating_overall || 0).toFixed(1)}
+                      </span>
+                    </div>
+                    {editingReview === review.id ? (
+                      <div className="mt-4 space-y-3">
+                        <label htmlFor={`review-edit-${review.id}`} className="block text-sm font-semibold text-[var(--plum)]">Review text</label>
+                        <textarea
+                          id={`review-edit-${review.id}`}
+                          value={editText}
+                          onChange={(event) => setEditText(event.target.value)}
+                          rows={4}
+                          className="esr-auth-input w-full rounded-xl p-3 text-base"
+                        />
+                        <label htmlFor={`rating-edit-${review.id}`} className="block text-sm font-semibold text-[var(--plum)]">Rating out of 5</label>
+                        <select
+                          id={`rating-edit-${review.id}`}
+                          value={editRating}
+                          onChange={(event) => setEditRating(Number(event.target.value))}
+                          className="esr-auth-input min-h-11 rounded-xl px-3 text-base"
+                        >
+                          {[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{rating}</option>)}
+                        </select>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" disabled={reviewSaving} onClick={() => void saveReview(review.id)} className="esr-primary-button min-h-11 rounded-full px-4 text-sm">Save review</button>
+                          <button type="button" onClick={() => setEditingReview(null)} className="esr-outline-button min-h-11 rounded-full px-4 text-sm">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="mt-3 whitespace-pre-wrap text-base leading-7 text-[var(--plum)]">{review.comment || 'No written comment.'}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button type="button" onClick={() => startEdit(review)} className="esr-outline-button min-h-11 rounded-full px-4 text-sm">Edit review</button>
+                          <button type="button" disabled={reviewSaving} onClick={() => void deleteReview(review.id)} className="esr-outline-button inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm text-[var(--crimson)]">
+                            <Trash2 aria-hidden="true" size={16} /> Delete review
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </article>
                 ))}
-              </div>
+              </section>
+            )}
+
+            {activeTab === 'history' && (
+              <section aria-label="Dining history" className="space-y-6">
+                {redemptions.length === 0 && views.length === 0 ? (
+                  <p className="rounded-2xl border border-dashed border-[var(--border)] bg-white p-8 text-center text-base text-[var(--plum)]">
+                    Your dining history will appear here.
+                  </p>
+                ) : (
+                  <>
+                    {redemptions.length > 0 && (
+                      <div>
+                        <h2 className="esr-serif mb-3 text-xl text-[var(--plum)]">Discounts and vouchers</h2>
+                        <ul className="space-y-3">
+                          {redemptions.map((item) => (
+                            <li key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
+                              <div>
+                                <p className="font-semibold text-[var(--plum)]">{item.offers?.name || 'Restaurant offer'}</p>
+                                <p className="mt-1 text-sm text-[var(--muted)]">{item.offers?.restaurants?.name || 'Restaurant'}</p>
+                              </div>
+                              <time className="text-sm text-[var(--muted)]" dateTime={item.used_at}>{dateLabel(item.used_at)}</time>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {views.length > 0 && (
+                      <div>
+                        <h2 className="esr-serif mb-3 text-xl text-[var(--plum)]">Recently viewed restaurants</h2>
+                        <ul className="space-y-3">
+                          {views.map((view) => (
+                            <li key={view.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--border)] bg-white p-4">
+                              <p className="font-semibold text-[var(--plum)]">
+                                {view.restaurants?.name || 'Restaurant'}
+                                {view.restaurants?.city ? <span className="font-normal text-[var(--muted)]"> · {view.restaurants.city}</span> : null}
+                              </p>
+                              <time className="text-sm text-[var(--muted)]" dateTime={view.viewed_at}>{dateLabel(view.viewed_at)}</time>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
             )}
           </div>
-        )}
-
-        {activeTab === 'history' && (
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl border border-red-100 p-6 shadow-md space-y-4">
-            <h2 className="text-sm font-extrabold text-gray-900">Voucher Redemption History</h2>
-            {redemptions.length === 0 ? (
-              <div className="text-center py-12 text-gray-400 text-xs font-semibold bg-red-50/30 rounded-2xl border border-dashed border-red-200">
-                No voucher redemptions recorded yet.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {redemptions.map((item: any, idx: number) => (
-                  <div key={idx} className="p-4 border border-red-100 rounded-2xl flex items-center justify-between bg-red-50/20">
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900">{item.offers?.name}</h4>
-                      <p className="text-[11px] text-gray-500">{item.offers?.restaurants?.name}</p>
-                    </div>
-                    <span className="text-[10px] font-extrabold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                      Redeemed
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        </section>
       </div>
     </div>
   )

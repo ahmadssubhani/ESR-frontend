@@ -9,7 +9,7 @@ export default async function CouponsPage() {
   const profile = profileData as { role: string } | null
 
   let query = supabase.from('coupons').select(`*, offers(id, name, restaurants(name)), user_coupons(id)`)
-  if (profile?.role === 'owner') {
+  if (profile?.role === 'restaurant') {
     const { data: r } = await supabase.from('restaurants').select('id').eq('owner_id', user!.id).single()
     const restaurant = r as { id: string } | null
     if (restaurant) query = query.eq('offers.restaurant_id', restaurant.id)

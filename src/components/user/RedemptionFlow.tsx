@@ -1,11 +1,10 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
-import { X, Star, ChevronRight, ChevronLeft, Upload, Copy, Check, Ticket, Clock } from 'lucide-react'
+import { X, Star, ChevronRight, ChevronLeft, Upload, Copy, Check, Ticket } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { ButtonLoader } from '@/components/ui/loader'
-import { formatVoucherCountdown, generateEsrVoucherCode } from '@/lib/esr-voucher-code'
 
 interface Props {
   id: string
@@ -33,7 +32,6 @@ export default function RedemptionFlow({ id, offer, canReview, onClose }: Props)
   const [comment, setComment] = useState('')
   const [images, setImages] = useState<File[]>([])
   const [couponCode, setCouponCode] = useState('')
-  const [voucherCountdown, setVoucherCountdown] = useState('30:00')
   const [copied, setCopied] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -45,22 +43,55 @@ export default function RedemptionFlow({ id, offer, canReview, onClose }: Props)
     sectionRef.current?.focus()
   }, [])
 
-  useEffect(() => {
-    if (step !== 'done' || !couponCode) return
-    const tick = () => {
-      setCouponCode(generateEsrVoucherCode(String(offer.id)))
-      setVoucherCountdown(formatVoucherCountdown())
-    }
-    tick()
-    const timer = window.setInterval(tick, 1000)
-    return () => window.clearInterval(timer)
-  }, [step, couponCode, offer.id])
-
   async function handleRedeem() {
     setLoading(true)
     setError('')
     const toastId = toast.loading('Claiming voucher…')
     try {
+      if (canReview) {
+        const ratingsList = Object.values(ratings)
+        if (ratingsList.some((rating) => rating < 1 || rating > 5) || !comment.trim()) {
+          throw new Error('Add a rating and short review before claiming this voucher.')
+        }
+
+        const restaurantId = (offer.restaurants as Record<string, unknown> | null)?.id
+        if (typeof restaurantId !== 'string') throw new Error('The restaurant details are unavailable.')
+        const imageUrls: string[] = []
+
+        if (images.length > 0) {
+          const supabase = createClient()
+          for (const file of images.slice(0, 5)) {
+            const ext = file.name.split('.').pop() || 'jpg'
+            const path = `reviews/${offer.id}/${crypto.randomUUID()}.${ext}`
+            const { error: uploadError } = await supabase.storage
+              .from('review-images')
+              .upload(path, file)
+            if (uploadError) throw new Error(`Could not upload a review photo: ${uploadError.message}`)
+            const { data: { publicUrl } } = supabase.storage.from('review-images').getPublicUrl(path)
+            imageUrls.push(publicUrl)
+          }
+        }
+
+        const avg = ratingsList.reduce((sum, rating) => sum + rating, 0) / ratingsList.length
+        const reviewResponse = await fetch('/api/reviews', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            restaurant_id: restaurantId,
+            offer_id: offer.id,
+            comment: comment.trim(),
+            ...ratings,
+            rating_overall: Number(avg.toFixed(1)),
+            tags: selectedTags,
+            images: imageUrls,
+          }),
+        })
+        const reviewData = await reviewResponse.json().catch(() => ({}))
+        if (!reviewResponse.ok) {
+          throw new Error(reviewData.error || 'Could not save your review.')
+        }
+      }
+
       const res = await fetch('/api/coupons/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -70,56 +101,23 @@ export default function RedemptionFlow({ id, offer, canReview, onClose }: Props)
       if (res.status === 401) {
         toast.error('Please sign in to claim this voucher', { id: toastId })
         router.push('/auth/login')
-        setLoading(false)
         return
       }
       if (!res.ok || !data.voucher_code) {
         const message = data.error || data.message || 'Failed to claim voucher.'
         setError(message)
         toast.error(message, { id: toastId })
-        setLoading(false)
         return
       }
-      setCouponCode(generateEsrVoucherCode(String(offer.id)))
 
-      if (canReview && ratings.rating_taste > 0) {
-        const avg = Object.values(ratings).reduce((a, b) => a + b, 0) / 4
-        const imageUrls: string[] = []
-
-        // Upload images to Supabase Storage
-        if (images.length > 0) {
-          const supabase = createClient()
-          for (const file of images.slice(0, 5)) {
-            const ext = file.name.split('.').pop()
-            const path = `reviews/${offer.id}/${Date.now()}.${ext}`
-            const { data: uploaded } = await supabase.storage.from('review-images').upload(path, file)
-            if (uploaded) {
-              const { data: { publicUrl } } = supabase.storage.from('review-images').getPublicUrl(path)
-              imageUrls.push(publicUrl)
-            }
-          }
-        }
-
-        await fetch('/api/reviews', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            restaurant_id: (offer.restaurants as Record<string, unknown>)?.id,
-            offer_id: offer.id,
-            comment,
-            ...ratings,
-            rating_overall: avg.toFixed(1),
-            tags: selectedTags,
-            images: imageUrls,
-          }),
-        })
-      }
-
-      setLoading(false)
+      setCouponCode(data.voucher_code)
       setStep('done')
       toast.success(data.already_claimed ? 'Showing your claimed voucher' : 'Voucher claimed successfully!', { id: toastId })
-    } catch {
-      toast.error('Something went wrong. Please try again.', { id: toastId })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not complete the voucher claim.'
+      setError(message)
+      toast.error(message, { id: toastId })
+    } finally {
       setLoading(false)
     }
   }
@@ -292,7 +290,7 @@ export default function RedemptionFlow({ id, offer, canReview, onClose }: Props)
                 <p className="font-black text-gray-900 text-lg">{(offer.restaurants as Record<string, unknown>)?.name as string}</p>
                 <p className="font-bold text-[var(--crimson)]">{offer.name as string}</p>
               </div>
-              <p className="text-sm text-gray-600">Confirm to save this claim. You will get an ESR- five-digit code that refreshes every 30 minutes.</p>
+              <p className="text-sm text-gray-600">Confirm to claim the active voucher for this offer.</p>
               {error && <p className="text-sm text-[var(--crimson)]">{error}</p>}
             </div>
           )}
@@ -307,10 +305,6 @@ export default function RedemptionFlow({ id, offer, canReview, onClose }: Props)
               <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-4">
                 <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Voucher code</p>
                 <p className="text-2xl font-black tracking-wider mt-1">{couponCode}</p>
-                <p className="mt-1 flex items-center justify-center gap-1 text-xs font-bold text-[var(--crimson)]">
-                  <Clock size={13} />
-                  Refreshes in {voucherCountdown}
-                </p>
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(couponCode)
@@ -344,11 +338,6 @@ export default function RedemptionFlow({ id, offer, canReview, onClose }: Props)
               </button>
             ) : (
               <div className="flex gap-3">
-                {canReview && step !== 'tags' && (
-                  <button type="button" onClick={() => setStep('terms')} className="min-h-11 flex-1 rounded-xl border border-[var(--border)] py-3 text-sm font-medium text-gray-700 transition-colors hover:border-[var(--crimson)]">
-                    Skip Review
-                  </button>
-                )}
                 <button
                   onClick={goNext}
                   disabled={step === 'terms' && !termsAccepted}
