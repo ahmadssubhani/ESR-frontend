@@ -3,12 +3,10 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Bell, ExternalLink, Heart, LogOut, Menu, MessageSquare, Tag, User, X } from 'lucide-react'
-import { toast } from 'sonner'
-import { createClient } from '@/lib/supabase/client'
-import { endDemoSession, getDemoRole, subscribeToDemoRole } from '@/lib/demo-session'
+import { Bell, Menu, MessageSquare, Tag, User, X } from 'lucide-react'
+import { getDemoRole, subscribeToDemoRole } from '@/lib/demo-session'
 
 interface Props {
   profile: {
@@ -23,7 +21,8 @@ const initialNotifications = [
   {
     id: 'voucher-ready',
     restaurant: 'Karachi Karahi House',
-    message: 'Your 25% voucher is ready to show.',
+    message: 'Visit the restaurant page to avail your 25% discount.',
+    href: '/user/offers#restaurant/demo-karachi-karahi',
     read: false,
   },
   {
@@ -42,14 +41,10 @@ const initialNotifications = [
 
 export default function UserNav({ profile }: Props) {
   const pathname = usePathname()
-  const router = useRouter()
-  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false'
   const demoRole = useSyncExternalStore(subscribeToDemoRole, getDemoRole, () => null)
-  const [signedOut, setSignedOut] = useState(false)
-  const isSignedIn = (Boolean(profile) || Boolean(demoRole)) && !signedOut
+  const isSignedIn = Boolean(profile) || Boolean(demoRole)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [userName, setUserName] = useState(profile?.full_name || 'Diner')
-  const [savedCount, setSavedCount] = useState(0)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [notifications, setNotifications] = useState(initialNotifications)
   const unreadCount = notifications.filter((notification) => !notification.read).length
@@ -58,63 +53,19 @@ export default function UserNav({ profile }: Props) {
     const updateUserData = () => {
       const localAvatar = localStorage.getItem('user_avatar')
       const localName = localStorage.getItem('user_name')
-      const localSaved = localStorage.getItem('esr_saved_offers')
-
       setAvatarUrl(localAvatar || profile?.image_url || profile?.avatar_url || null)
       setUserName(localName || profile?.full_name || 'Account')
-
-      if (localSaved) {
-        try {
-          const parsed: unknown = JSON.parse(localSaved)
-          setSavedCount(Array.isArray(parsed) ? parsed.length : 0)
-        } catch (error) {
-          console.error('Could not read saved offers:', error)
-          setSavedCount(0)
-        }
-      } else {
-        setSavedCount(0)
-      }
     }
 
     updateUserData()
-    window.addEventListener('esr-saved-updated', updateUserData)
     window.addEventListener('user-avatar-changed', updateUserData)
     window.addEventListener('storage', updateUserData)
 
     return () => {
-      window.removeEventListener('esr-saved-updated', updateUserData)
       window.removeEventListener('user-avatar-changed', updateUserData)
       window.removeEventListener('storage', updateUserData)
     }
   }, [profile])
-
-  async function signOut() {
-    if (demoRole) {
-      endDemoSession()
-      setSignedOut(true)
-      setAvatarUrl(null)
-      setUserName('Account')
-      toast.success('Demo session ended')
-      router.push('/auth/login')
-      return
-    }
-
-    try {
-      const supabase = createClient()
-      await supabase.auth.signOut()
-    } catch (error) {
-      console.error('Sign out failed:', error)
-    }
-
-    localStorage.removeItem('user_avatar')
-    localStorage.removeItem('user_name')
-    setSignedOut(true)
-    setAvatarUrl(null)
-    setUserName('Account')
-    toast.success('Signed out')
-    router.push('/')
-    router.refresh()
-  }
 
   const isDiscover = pathname === '/user/offers'
   const isFeed = pathname.startsWith('/user/foodies-feed')
@@ -153,16 +104,6 @@ export default function UserNav({ profile }: Props) {
               >
                 Foodie Feed
               </Link>
-              {isSignedIn && (
-                <Link
-                  href="/user/favourites"
-                  aria-label={`Saved offers${savedCount ? `, ${savedCount} saved` : ''}`}
-                  aria-current={pathname.startsWith('/user/favourites') ? 'page' : undefined}
-                  className="rounded-full p-2 text-[var(--plum)] hover:bg-[var(--surface-muted)]"
-                >
-                  <Heart aria-hidden="true" size={18} />
-                </Link>
-              )}
             </nav>
           </div>
 
@@ -212,7 +153,13 @@ export default function UserNav({ profile }: Props) {
                           )}
                           <div className="min-w-0">
                             <p className="font-bold text-[var(--plum)]">{notification.restaurant}</p>
-                            <p className="mt-1 text-sm text-[var(--muted)]">{notification.message}</p>
+                            {notification.href ? (
+                              <Link href={notification.href} className="mt-1 inline-block min-h-11 py-2 text-sm text-[var(--crimson)] underline-offset-2 hover:underline">
+                                {notification.message}
+                              </Link>
+                            ) : (
+                              <p className="mt-1 text-sm text-[var(--muted)]">{notification.message}</p>
+                            )}
                             <span className="mt-2 inline-block rounded-full bg-[var(--surface-muted)] px-2.5 py-1 text-xs font-semibold text-[var(--muted)]">
                               Sample notification
                             </span>
@@ -242,22 +189,6 @@ export default function UserNav({ profile }: Props) {
               </Dialog.Portal>
             </Dialog.Root>
 
-            <a
-              href="https://esrah.org/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden min-h-11 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-[var(--plum)] hover:border-[var(--crimson)] lg:inline-flex"
-            >
-              App preview <ExternalLink aria-hidden="true" size={14} />
-              <span className="sr-only">(opens in new tab)</span>
-            </a>
-            <Link
-              href={demoMode ? '/demo/workspace' : '/admin/dashboard'}
-              className="hidden min-h-11 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-3 text-sm font-semibold text-[var(--plum)] hover:border-[var(--crimson)] lg:inline-flex"
-            >
-              Business workspace <ExternalLink aria-hidden="true" size={14} />
-            </Link>
-
             {isSignedIn ? (
               <>
                 <Link
@@ -279,20 +210,13 @@ export default function UserNav({ profile }: Props) {
                       <User aria-hidden="true" size={16} />
                     )}
                   </span>
-                  <span className="hidden sm:inline">ESR · {demoRole || 'User'}</span>
+                  <span className="hidden max-w-36 truncate sm:inline">{userName}</span>
                 </Link>
-                <button
-                  type="button"
-                  onClick={signOut}
-                  aria-label="Sign out"
-                  className="hidden h-11 w-11 items-center justify-center rounded-full text-[var(--plum)] hover:bg-white sm:inline-flex"
-                >
-                  <LogOut aria-hidden="true" size={18} />
-                </button>
               </>
             ) : (
               <Link
                 href="/auth/login"
+                aria-label="Login / Account"
                 className="inline-flex min-h-11 items-center rounded-full bg-[var(--crimson)] px-4 text-sm font-bold text-white hover:bg-[var(--crimson-hover)]"
               >
                 <span className="hidden sm:inline">Login / Account</span>
@@ -334,30 +258,6 @@ export default function UserNav({ profile }: Props) {
                 className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-semibold text-[var(--plum)] hover:bg-white"
               >
                 <MessageSquare aria-hidden="true" size={18} /> Foodie Feed
-              </Link>
-              {isSignedIn && (
-                <Link
-                  href="/user/favourites"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-semibold text-[var(--plum)] hover:bg-white"
-                >
-                  <Heart aria-hidden="true" size={18} /> Saved ({savedCount})
-                </Link>
-              )}
-              <a
-                href="https://esrah.org/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-semibold text-[var(--plum)] hover:bg-white"
-              >
-                <ExternalLink aria-hidden="true" size={18} /> App preview
-                <span className="sr-only">(opens in new tab)</span>
-              </a>
-              <Link
-                href={demoMode ? '/demo/workspace' : '/admin/dashboard'}
-                className="flex min-h-11 items-center gap-3 rounded-xl px-3 font-semibold text-[var(--plum)] hover:bg-white"
-              >
-                <ExternalLink aria-hidden="true" size={18} /> Business workspace
               </Link>
             </div>
           </nav>

@@ -53,7 +53,7 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="esr-offer-detail max-w-2xl mx-auto">
       {/* Back */}
       <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4 transition-colors">
         <ArrowLeft size={18} /> Back
@@ -67,11 +67,11 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
           <div className="w-full h-full flex items-center justify-center text-6xl">🍽️</div>
         )}
         {discountPct > 0 && (
-          <div className="absolute top-3 right-3 bg-red-600 text-white font-black text-sm px-3 py-1.5 rounded-xl">
+          <div className="absolute top-3 right-3 rounded-xl bg-[var(--crimson)] px-3 py-1.5 text-sm font-bold text-white">
             {discountPct}% OFF
           </div>
         )}
-        <button onClick={toggleWishlist} className={`absolute top-3 left-3 w-9 h-9 rounded-full bg-white shadow flex items-center justify-center ${inWishlist ? 'text-red-600' : 'text-gray-400'}`}>
+        <button type="button" aria-label={`${inWishlist ? 'Remove from' : 'Save to'} favourites`} aria-pressed={inWishlist} onClick={toggleWishlist} className={`absolute left-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white shadow ${inWishlist ? 'text-[var(--crimson)]' : 'text-gray-500'}`}>
           <Heart size={18} fill={inWishlist ? 'currentColor' : 'none'} />
         </button>
       </div>
@@ -80,22 +80,22 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <p className="text-sm text-red-600 font-medium mb-1">{(restaurant?.categories as { name: string })?.name}</p>
+            <p className="mb-1 text-sm font-medium text-[var(--crimson)]">{(restaurant?.categories as { name: string })?.name}</p>
             <h1 className="text-xl font-black text-gray-900">{offer.name as string}</h1>
             <p className="text-gray-500 text-sm mt-1 flex items-center gap-1">
               <MapPin size={14} /> {restaurant?.name as string} · {restaurant?.city as string}
             </p>
           </div>
           {avg_rating && (
-            <div className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded-lg">
-              <Star size={14} className="text-red-600 fill-current" />
-              <span className="text-sm font-bold text-[rgb(220, 38, 38)]">{avg_rating}</span>
+            <div className="flex items-center gap-1 rounded-lg bg-[var(--surface-muted)] px-2 py-1">
+              <Star size={14} className="fill-current text-[var(--crimson)]" />
+              <span className="text-sm font-bold text-[var(--crimson)]">{avg_rating}</span>
             </div>
           )}
         </div>
 
         <div className="flex items-end gap-3 mb-4">
-          <span className="text-3xl font-black text-[rgb(220, 38, 38)]">Rs {offer.discounted_price as number}</span>
+          <span className="text-3xl font-bold text-[var(--crimson)]">Rs {offer.discounted_price as number}</span>
           {(offer.original_price as number) > 0 && (
             <span className="text-gray-400 line-through text-lg">Rs {offer.original_price as number}</span>
           )}
@@ -113,18 +113,21 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
         {restaurantTags.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-4">
             {restaurantTags.map(tag => (
-              <span key={tag} className="bg-red-50 text-red-600 text-xs px-2 py-1 rounded-lg">{tag}</span>
+              <span key={tag} className="rounded-lg bg-[var(--surface-muted)] px-2 py-1 text-xs text-[var(--plum)]">{tag}</span>
             ))}
           </div>
         )}
 
         {/* Redeem Button */}
         {!isLoggedIn ? (
-          <button onClick={() => router.push('/auth/login')} className="w-full bg-[rgb(220, 38, 38)] text-white font-bold py-4 rounded-xl hover:bg-[#C4341F] transition-colors flex items-center justify-center gap-2">
+          <button onClick={() => router.push('/auth/login')} className="esr-primary-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl py-4">
             Sign in to Claim <ChevronRight size={18} />
           </button>
         ) : already_claimed ? (
           <button
+            type="button"
+            aria-expanded={showRedemption}
+            aria-controls="offer-redemption-flow"
             onClick={() => setShowRedemption(true)}
             className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
           >
@@ -136,8 +139,11 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
           </div>
         ) : (
           <button
+            type="button"
+            aria-expanded={showRedemption}
+            aria-controls="offer-redemption-flow"
             onClick={() => setShowRedemption(true)}
-            className="w-full bg-[rgb(220, 38, 38)] text-white font-bold py-4 rounded-xl hover:bg-[#C4341F] transition-colors flex items-center justify-center gap-2"
+            className="esr-primary-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl py-4"
           >
             Claim Voucher <ChevronRight size={18} />
           </button>
@@ -156,7 +162,7 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
                 <div key={r.id as string} className="border-b border-gray-50 pb-4 last:border-0 last:pb-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-xs font-bold">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--surface-muted)] text-xs font-bold text-[var(--crimson)]">
                         {profile?.full_name?.charAt(0) || '?'}
                       </div>
                       <span className="text-sm font-medium text-gray-700">{profile?.full_name || 'Customer'}</span>
@@ -188,9 +194,10 @@ export default function OfferDetail({ offer, restaurantTags, isLoggedIn }: Props
         </div>
       )}
 
-      {/* Redemption Flow Modal */}
+      {/* Inline redemption flow for legacy offer links */}
       {showRedemption && (
         <RedemptionFlow
+          id="offer-redemption-flow"
           offer={offer}
           canReview={already_claimed ? false : can_review}
           onClose={() => setShowRedemption(false)}

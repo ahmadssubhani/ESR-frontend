@@ -18,7 +18,7 @@ export default async function OffersPage() {
       const supabase = await createAdminClient()
       const { data, error } = await supabase
         .from('offers')
-        .select('*, restaurants!inner(id, name, city, address, lat, lng, cover_url, logo_url, is_featured, categories(name))')
+        .select('*, restaurants!inner(id, name, city, address, country, description, phone_number, opening_hours, lat, lng, cover_url, image_url, logo_url, is_featured, tags, restaurant_type, website, categories(name))')
         .eq('approval_status', true)
         .eq('is_redeemable', true)
         .eq('is_bumper', false)

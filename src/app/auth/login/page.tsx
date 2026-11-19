@@ -223,7 +223,6 @@ function LoginForm() {
   async function handleEmailLink(e: React.FormEvent) {
     e.preventDefault()
     if (demoMode) {
-      setStatus(`Demo sign-in link sent to ${email}. Opening the diner preview…`)
       enterDemo('Diner')
       return
     }

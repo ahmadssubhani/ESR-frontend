@@ -150,6 +150,67 @@ select {
   background: var(--crimson-hover);
 }
 
+.esr-discover,
+.esr-restaurant-detail,
+.esr-offer-detail,
+.esr-redemption-flow {
+  --border: #f0dcdc;
+  --crimson: #bc3345;
+  --crimson-hover: #a5293a;
+  --surface-muted: #f9e4e2;
+}
+
+.esr-discover :focus-visible,
+.esr-restaurant-detail :focus-visible,
+.esr-offer-detail :focus-visible,
+.esr-redemption-flow :focus-visible {
+  outline-color: var(--crimson);
+}
+
+.esr-review-summary {
+  background-color: #fae8e4;
+  color: #4a1f26;
+}
+
+.esr-review-summary:hover,
+.esr-review-summary:focus-within {
+  background-color: #fae8e4;
+}
+
+@media (forced-colors: active) {
+  .esr-review-summary {
+    forced-color-adjust: none;
+    background-color: #fae8e4;
+    border-color: #f0dcdc;
+    color: #4a1f26;
+  }
+}
+
+.esr-discover .esr-chip {
+  border-color: var(--border);
+  color: var(--plum);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.esr-discover .esr-chip[aria-pressed="true"] {
+  border-color: var(--plum);
+  background: var(--plum);
+  color: #fff;
+}
+
+.esr-restaurant-card {
+  box-shadow: 0 1px 2px rgba(74, 31, 38, 0.04);
+  transition:
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.esr-restaurant-card:hover {
+  box-shadow: 0 8px 24px rgba(74, 31, 38, 0.08);
+  transform: translateY(-2px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

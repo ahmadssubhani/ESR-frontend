@@ -8,6 +8,7 @@ import { ButtonLoader } from '@/components/ui/loader'
 import { formatVoucherCountdown, generateEsrVoucherCode } from '@/lib/esr-voucher-code'
 
 interface Props {
+  id: string
   offer: Record<string, unknown>
   canReview: boolean
   onClose: () => void
@@ -22,7 +23,7 @@ const RATING_DIMS = [
   { key: 'rating_money_value', label: 'Value for Money' },
 ]
 
-export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
+export default function RedemptionFlow({ id, offer, canReview, onClose }: Props) {
   const router = useRouter()
   const restaurantTags = ((offer.restaurants as Record<string, unknown>)?.tags as string[]) || []
 
@@ -37,8 +38,12 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const sectionRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    sectionRef.current?.focus()
+  }, [])
 
   useEffect(() => {
     if (step !== 'done' || !couponCode) return
@@ -79,7 +84,7 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
 
       if (canReview && ratings.rating_taste > 0) {
         const avg = Object.values(ratings).reduce((a, b) => a + b, 0) / 4
-        let imageUrls: string[] = []
+        const imageUrls: string[] = []
 
         // Upload images to Supabase Storage
         if (images.length > 0) {
@@ -110,7 +115,6 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
         })
       }
 
-      setSuccess(true)
       setLoading(false)
       setStep('done')
       toast.success(data.already_claimed ? 'Showing your claimed voucher' : 'Voucher claimed successfully!', { id: toastId })
@@ -137,15 +141,21 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50">
-      <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden max-h-[90vh] flex flex-col">
+    <section
+      ref={sectionRef}
+      id={id}
+      tabIndex={-1}
+      aria-labelledby="redemption-flow-title"
+      className="esr-redemption-flow mt-6 w-full rounded-2xl border border-[var(--border)] bg-white outline-none focus-visible:ring-2 focus-visible:ring-[var(--crimson)]"
+    >
+      <div className="w-full overflow-hidden rounded-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
             {currentIdx > 0 && step !== 'done' && (
-              <button onClick={goPrev} className="text-gray-400 hover:text-gray-600"><ChevronLeft size={20} /></button>
+              <button type="button" aria-label="Previous step" onClick={goPrev} className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-500 hover:text-gray-700"><ChevronLeft size={20} /></button>
             )}
-            <h2 className="font-black text-gray-900">
+              <h2 id="redemption-flow-title" className="font-bold text-gray-900">
               {step === 'tags' && 'Select Tags'}
               {step === 'rating' && 'Rate Your Experience'}
               {step === 'review' && 'Write a Review'}
@@ -154,7 +164,7 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
               {step === 'done' && '🎉 Claimed!'}
             </h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+          <button type="button" aria-label="Close voucher flow" onClick={onClose} className="inline-flex min-h-11 min-w-11 items-center justify-center text-gray-500 hover:text-gray-700"><X size={20} /></button>
         </div>
 
         {/* Progress */}
@@ -162,13 +172,13 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
           <div className="px-6 pt-3">
             <div className="flex gap-1">
               {stepOrder.map((s, i) => (
-                <div key={s} className={`flex-1 h-1 rounded-full transition-colors ${i <= currentIdx ? 'bg-red-600' : 'bg-gray-200'}`} />
+                <div key={s} className={`h-1 flex-1 rounded-full transition-colors ${i <= currentIdx ? 'bg-[var(--crimson)]' : 'bg-gray-200'}`} />
               ))}
             </div>
           </div>
         )}
 
-        <div className="overflow-y-auto flex-1 px-6 py-5">
+        <div className="px-6 py-5">
           {/* STEP: Tags */}
           {step === 'tags' && (
             <div className="space-y-4">
@@ -183,8 +193,8 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
                       onClick={() => toggleTag(tag)}
                       className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
                         selectedTags.includes(tag)
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-100 text-gray-700 hover:bg-red-50 hover:text-red-600'
+                          ? 'bg-[var(--crimson)] text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-[var(--surface-muted)] hover:text-[var(--crimson)]'
                       }`}
                     >
                       {tag}
@@ -202,13 +212,13 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
                 <div key={dim.key}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-700">{dim.label}</span>
-                    <span className="text-sm font-bold text-red-600">{ratings[dim.key] || '—'}/5</span>
+                    <span className="text-sm font-bold text-[var(--crimson)]">{ratings[dim.key] || '—'}/5</span>
                   </div>
                   <div className="flex gap-2">
                     {[1, 2, 3, 4, 5].map(v => (
                       <button key={v} onClick={() => setRatings(r => ({ ...r, [dim.key]: v }))}
                         className={`flex-1 py-2 rounded-xl text-sm font-bold transition-colors ${
-                          ratings[dim.key] >= v ? 'bg-red-600 text-white' : 'bg-gray-100 text-gray-400'
+                          ratings[dim.key] >= v ? 'bg-[var(--crimson)] text-white' : 'bg-gray-100 text-gray-500'
                         }`}>
                         <Star size={16} className="mx-auto" fill={ratings[dim.key] >= v ? 'currentColor' : 'none'} />
                       </button>
@@ -227,7 +237,7 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
                 onChange={e => setComment(e.target.value)}
                 placeholder="Tell others about your experience…"
                 rows={4}
-                className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-red-600 resize-none"
+                className="w-full rounded-xl border border-[var(--border)] px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)] resize-none"
               />
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-2">Photos (up to 5)</p>
@@ -236,12 +246,14 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
                     <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-100">
                       <img src={URL.createObjectURL(img)} className="w-full h-full object-cover" alt="" />
                       <button onClick={() => setImages(imgs => imgs.filter((_, j) => j !== i))}
-                        className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">×</button>
+                        aria-label={`Remove review photo ${i + 1}`}
+                        className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-full bg-[var(--crimson)] text-xs text-white">×</button>
                     </div>
                   ))}
                   {images.length < 5 && (
                     <button onClick={() => fileRef.current?.click()}
-                      className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-[rgb(220, 38, 38)] hover:text-[rgb(220, 38, 38)] transition-colors">
+                      aria-label="Add review photos"
+                      className="flex h-16 w-16 items-center justify-center rounded-xl border border-dashed border-[var(--border)] text-gray-500 transition-colors hover:border-[var(--crimson)] hover:text-[var(--crimson)]">
                       <Upload size={18} />
                     </button>
                   )}
@@ -266,7 +278,7 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
               </div>
               <label className="flex items-start gap-3 cursor-pointer">
                 <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)}
-                  className="mt-0.5 accent-[rgb(220, 38, 38)]" />
+                  className="mt-0.5 accent-[var(--crimson)]" />
                 <span className="text-sm text-gray-700">I have read and agree to the Terms & Conditions</span>
               </label>
             </div>
@@ -275,27 +287,27 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
           {/* STEP: Coupon */}
           {step === 'coupon' && (
             <div className="space-y-6 text-center">
-              <div className="bg-red-50 rounded-2xl p-6">
+              <div className="rounded-2xl bg-[var(--surface-muted)] p-6">
                 <p className="text-sm text-gray-500 mb-1">Claiming offer at</p>
                 <p className="font-black text-gray-900 text-lg">{(offer.restaurants as Record<string, unknown>)?.name as string}</p>
-                <p className="text-red-600 font-bold">{offer.name as string}</p>
+                <p className="font-bold text-[var(--crimson)]">{offer.name as string}</p>
               </div>
               <p className="text-sm text-gray-600">Confirm to save this claim. You will get an ESR- five-digit code that refreshes every 30 minutes.</p>
-              {error && <p className="text-red-500 text-sm">{error}</p>}
+              {error && <p className="text-sm text-[var(--crimson)]">{error}</p>}
             </div>
           )}
 
           {step === 'done' && (
             <div className="text-center py-6 space-y-4">
-              <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--surface-muted)] text-[var(--crimson)]">
                 <Ticket size={24} />
               </div>
               <h3 className="text-xl font-black text-gray-900">Voucher Claimed!</h3>
               <p className="text-gray-600">Show this code at {(offer.restaurants as Record<string, unknown>)?.name as string}.</p>
-              <div className="bg-red-50 border-2 border-dashed border-red-300 rounded-2xl p-4">
+              <div className="rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-muted)] p-4">
                 <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">Voucher code</p>
                 <p className="text-2xl font-black tracking-wider mt-1">{couponCode}</p>
-                <p className="mt-1 flex items-center justify-center gap-1 text-xs font-bold text-red-600">
+                <p className="mt-1 flex items-center justify-center gap-1 text-xs font-bold text-[var(--crimson)]">
                   <Clock size={13} />
                   Refreshes in {voucherCountdown}
                 </p>
@@ -305,14 +317,14 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
                     setCopied(true)
                     setTimeout(() => setCopied(false), 2000)
                   }}
-                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-red-600"
+                  className="mt-2 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-[var(--crimson)]"
                 >
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                   {copied ? 'Copied' : 'Copy code'}
                 </button>
               </div>
               <button onClick={() => { onClose(); router.refresh() }}
-                className="w-full bg-[rgb(220,38,38)] text-white font-bold py-3 rounded-xl hover:bg-[#C4341F] transition-colors">
+                className="esr-primary-button min-h-11 w-full rounded-xl py-3">
                 Back to Offers
               </button>
             </div>
@@ -326,21 +338,21 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
               <button
                 onClick={handleRedeem}
                 disabled={loading}
-                className="w-full bg-[rgb(220,38,38)] text-white font-bold py-4 rounded-xl hover:bg-[#C4341F] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                className="esr-primary-button inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl py-4 disabled:opacity-60"
               >
                 {loading ? <ButtonLoader label="Claiming…" /> : 'Confirm Claim'}
               </button>
             ) : (
               <div className="flex gap-3">
                 {canReview && step !== 'tags' && (
-                  <button onClick={() => setStep('terms')} className="flex-1 border-2 border-gray-200 text-gray-600 font-medium py-3 rounded-xl hover:border-gray-300 transition-colors text-sm">
+                  <button type="button" onClick={() => setStep('terms')} className="min-h-11 flex-1 rounded-xl border border-[var(--border)] py-3 text-sm font-medium text-gray-700 transition-colors hover:border-[var(--crimson)]">
                     Skip Review
                   </button>
                 )}
                 <button
                   onClick={goNext}
                   disabled={step === 'terms' && !termsAccepted}
-                  className="flex-1 bg-[rgb(220, 38, 38)] text-white font-bold py-3 rounded-xl hover:bg-[#C4341F] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+                  className="esr-primary-button inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl py-3 disabled:opacity-60"
                 >
                   Continue <ChevronRight size={18} />
                 </button>
@@ -349,6 +361,6 @@ export default function RedemptionFlow({ offer, canReview, onClose }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }

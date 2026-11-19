@@ -1,26 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams, useRouter } from 'next/navigation'
-import {
-  MapPin,
-  Search,
-  Heart,
-  Tag,
-  SlidersHorizontal,
-  Ticket,
-  CheckCircle2,
-  ChevronDown,
-  ShieldCheck,
-  Star,
-  X,
-  Copy,
-  Clock,
-  Check,
-  MessageSquarePlus,
-  Send
-} from 'lucide-react'
+import { Heart, ChevronDown } from 'lucide-react'
 import { toggleSaveOffer, createClient } from '@/lib/supabase/client'
 import type { AdminAd, Offer } from '@/types/database'
 import {
@@ -32,7 +15,7 @@ import {
 } from '@/lib/saved-offers'
 import { toast } from 'sonner'
 import { PageLoader } from '@/components/ui/loader'
-import { formatVoucherCountdown, generateEsrVoucherCode } from '@/lib/esr-voucher-code'
+import RestaurantDetailView from '@/components/user/RestaurantDetailView'
 
 interface OfferWithRestaurant extends Offer {
   restaurants: {
@@ -45,20 +28,16 @@ interface OfferWithRestaurant extends Offer {
     cover_url: string | null
     logo_url: string | null
     is_featured?: boolean
+    description?: string | null
+    country?: string | null
+    phone_number?: string | null
+    opening_hours?: string | null
+    website?: string | null
+    image_url?: string | null
+    tags?: string[] | null
+    restaurant_type?: string | null
     categories: { name: string } | null
   } | null
-}
-
-interface VerifiedReview {
-  id: string
-  userName: string
-  userAvatar: string
-  restaurantName: string
-  dishName: string
-  rating: number
-  reviewText: string
-  image: string
-  date: string
 }
 
 interface Props {
@@ -69,20 +48,6 @@ interface Props {
   demoMode?: boolean
 }
 
-const VERIFIED_REVIEWS: VerifiedReview[] = [
-  {
-    id: 'rev-1',
-    userName: 'Usman Chaudhry',
-    userAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150',
-    restaurantName: 'Burger Craft',
-    dishName: 'Smash Cheeseburger Deal',
-    rating: 5,
-    reviewText: '100% verified review with photo confirmation. The beef smash burger was cooked to perfection. ESR voucher was accepted without any hassle.',
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
-    date: 'August 4, 2026',
-  },
-]
-
 const discountPct = (o: Offer) =>
   o.original_price > 0 ? Math.ceil(100 - (o.discounted_price / o.original_price) * 100) : 0
 
@@ -92,8 +57,8 @@ const normalizeFilterValue = (value: string) =>
 const CUISINE_FILTERS = ['All', 'Pakistani', 'Burgers', 'Continental', 'BBQ', 'Cafés', 'Pizza']
 const CITY_FILTERS = ['All cities', 'Karachi', 'Lahore', 'Islamabad', 'Rawalpindi', 'Faisalabad', 'Multan', 'Peshawar']
 
-async function fetchNearbyRestaurants(lat: number, lng: number, mode: 'top' | 'nearby') {
-  const res = await fetch(`/api/restaurants/nearby?lat=${lat}&lng=${lng}&mode=${mode}`)
+async function fetchNearbyRestaurants(lat: number, lng: number) {
+  const res = await fetch(`/api/restaurants/nearby?lat=${lat}&lng=${lng}&mode=nearby`)
   const data = await res.json()
   if (res.ok && Array.isArray(data)) return data as OfferWithRestaurant[]
   return []
@@ -109,21 +74,11 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
   const [activeCuisine, setActiveCuisine] = useState('All')
   const [selectedCity, setSelectedCity] = useState('All cities')
   const [browseTab, setBrowseTab] = useState<'featured' | 'nearby' | 'latest'>('featured')
-  
-  const [modalStep, setModalStep] = useState<'review' | 'claim' | null>(null)
-  const [selectedClaimOffer, setSelectedClaimOffer] = useState<OfferWithRestaurant | null>(null)
-  
   const [reviewedRestaurantIds, setReviewedRestaurantIds] = useState<Set<string>>(new Set())
-
-  const [reviewRating, setReviewRating] = useState(5)
-  const [reviewText, setReviewText] = useState('')
-  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
-
-  const [isCopied, setIsCopied] = useState(false)
-  const [activeVoucherCode, setActiveVoucherCode] = useState('')
-  const [voucherCountdown, setVoucherCountdown] = useState('30:00')
-  const [claimError, setClaimError] = useState('')
-  const [isClaiming, setIsClaiming] = useState(false)
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null)
+  const detailScrollPosition = useRef(0)
+  const openedFromDiscover = useRef(false)
+  const lastRestaurantLink = useRef<HTMLAnchorElement | null>(null)
 
   useEffect(() => {
     const savedReviews = localStorage.getItem('esr_reviewed_restaurants')
@@ -137,84 +92,19 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     }
   }, [])
 
-  async function persistClaim(offer: OfferWithRestaurant) {
-    setIsClaiming(true)
-    setClaimError('')
-    try {
-      if (demoMode) {
-        const code = `ESR-${offer.id.replace(/[^a-z0-9]/gi, '').slice(-6).toUpperCase()}`
-        setActiveVoucherCode(code)
-        setClaimedOfferIds((prev) => {
-          const next = new Set(prev).add(offer.id)
-          localStorage.setItem('esr_demo_claimed_offers', JSON.stringify(Array.from(next)))
-          return next
-        })
-        toast.success('Demo voucher claimed — no account or database required.')
-        return true
-      }
-
-      const res = await fetch('/api/coupons/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ offer_id: offer.id }),
-      })
-      const data = await res.json()
-      if (res.status === 401) {
-        toast.error('Please sign in to claim this voucher')
-        router.push('/auth/login')
-        return false
-      }
-      if (!res.ok || !data.voucher_code) {
-        const message = data.error || data.message || 'Could not claim voucher'
-        setClaimError(message)
-        toast.error(message)
-        return false
-      }
-      setActiveVoucherCode(generateEsrVoucherCode(offer.id))
-      setClaimedOfferIds((prev) => new Set(prev).add(offer.id))
-      if (data.already_claimed) {
-        toast.success('Showing your claimed voucher')
-      } else {
-        toast.success('Voucher claimed — it now appears in admin')
-      }
-      return true
-    } catch {
-      toast.error('Could not claim voucher. Try again.')
-      return false
-    } finally {
-      setIsClaiming(false)
-    }
-  }
-
-  useEffect(() => {
-    if (modalStep !== 'claim' || !selectedClaimOffer || !activeVoucherCode) return
-    const tick = () => {
-      setActiveVoucherCode(generateEsrVoucherCode(selectedClaimOffer.id))
-      setVoucherCountdown(formatVoucherCountdown())
-    }
-    tick()
-    const timer = window.setInterval(tick, 1000)
-    return () => window.clearInterval(timer)
-  }, [modalStep, selectedClaimOffer, activeVoucherCode])
-
   useEffect(() => {
     if (tabParam === 'foodies-feed') {
       router.replace('/user/foodies-feed')
       return
     }
-    if (tabParam) {
-      setActiveCategory(tabParam)
-    } else {
-      setActiveCategory('all')
-    }
+    setActiveCategory(tabParam === 'saved' ? 'saved' : 'all')
   }, [tabParam, router])
 
   const [offers, setOffers] = useState<OfferWithRestaurant[]>(initialOffers)
   const [nearbyOffers, setNearbyOffers] = useState<OfferWithRestaurant[]>([])
-  const [topRestaurantsActive, setTopRestaurantsActive] = useState(false)
   const [nearbyRestaurantsActive, setNearbyRestaurantsActive] = useState(false)
   const [locLoading, setLocLoading] = useState(false)
-  const [locMode, setLocMode] = useState<'top' | 'nearby' | null>(null)
+  const [locMode, setLocMode] = useState<'nearby' | null>(null)
   const [savedOfferIds, setSavedOfferIds] = useState<Set<string>>(new Set())
   const [claimedOfferIds, setClaimedOfferIds] = useState<Set<string>>(new Set())
   const [userId, setUserId] = useState<string | null>(null)
@@ -222,6 +112,37 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
   useEffect(() => {
     setOffers(initialOffers)
   }, [initialOffers])
+
+  useEffect(() => {
+    const readRestaurantHash = () => {
+      const match = window.location.hash.match(/^#restaurant\/(.+)$/)
+      const restaurantId = match ? decodeURIComponent(match[1]) : null
+      setSelectedRestaurantId(restaurantId)
+      if (!restaurantId) {
+        document.title = 'Discover restaurants | ESR'
+        if (openedFromDiscover.current) {
+          window.scrollTo({ top: detailScrollPosition.current, behavior: 'instant' })
+          requestAnimationFrame(() => lastRestaurantLink.current?.focus({ preventScroll: true }))
+        }
+      }
+    }
+
+    readRestaurantHash()
+    window.addEventListener('hashchange', readRestaurantHash)
+    window.addEventListener('popstate', readRestaurantHash)
+    return () => {
+      window.removeEventListener('hashchange', readRestaurantHash)
+      window.removeEventListener('popstate', readRestaurantHash)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedRestaurantId) return
+    const restaurant = [...offers, ...nearbyOffers].find(
+      (offer) => offer.restaurants?.id === selectedRestaurantId
+    )?.restaurants
+    if (restaurant) document.title = `${restaurant.name} · ESR`
+  }, [nearbyOffers, offers, selectedRestaurantId])
 
   useEffect(() => {
     if (demoMode) return
@@ -240,7 +161,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
         const { data, error } = await supabase
           .from('offers')
           .select(
-            '*, restaurants!inner(id, name, city, address, lat, lng, cover_url, logo_url, is_featured, categories(name))'
+            '*, restaurants!inner(id, name, city, address, country, description, phone_number, opening_hours, lat, lng, cover_url, image_url, logo_url, is_featured, tags, restaurant_type, website, categories(name))'
           )
           .eq('id', id)
           .eq('approval_status', true)
@@ -273,61 +194,27 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     }
   }, [demoMode, router])
 
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false)
-
-  type DiscountRange = { id: string; label: string; min?: number; max?: number }
-  const DISCOUNT_RANGES: DiscountRange[] = [
-    { id: 'all', label: 'All Open Deals' },
-    { id: '0-5', label: '0-5% OFF', min: 0, max: 5 },
-    { id: '6-10', label: '6-10% OFF', min: 6, max: 10 },
-    { id: '11-20', label: '11-20% OFF', min: 11, max: 20 },
-    { id: '21-35', label: '21-35% OFF', min: 21, max: 35 },
-  ]
-  const [selectedDiscount, setSelectedDiscount] = useState<string>('all')
-
-  // Do NOT auto-activate Nearby on mount — that hid DB "All Offers" behind an empty
-  // location feed. Nearby / Top only run when the user clicks those chips.
-
-  const applyNearbyResults = (
-    mode: 'top' | 'nearby',
-    data: OfferWithRestaurant[],
-    options?: { activate?: boolean }
-  ) => {
+  const applyNearbyResults = (data: OfferWithRestaurant[], options?: { activate?: boolean }) => {
     setNearbyOffers(data)
     const shouldActivate = options?.activate !== false
     if (!shouldActivate) return
-    if (mode === 'top') {
-      setTopRestaurantsActive(true)
-      setNearbyRestaurantsActive(false)
-    } else {
-      setNearbyRestaurantsActive(true)
-      setTopRestaurantsActive(false)
-    }
+    setNearbyRestaurantsActive(true)
   }
 
   const handleLocationFilter = (
-    mode: 'top' | 'nearby',
+    mode: 'nearby',
     options?: { silent?: boolean; activateOnSuccess?: boolean; highlightChip?: boolean }
   ) => {
     const activateOnSuccess = options?.activateOnSuccess !== false
     const highlightChip = options?.highlightChip ?? !options?.silent
 
-    if (highlightChip) {
-      if (mode === 'top') {
-        setTopRestaurantsActive(true)
-        setNearbyRestaurantsActive(false)
-      } else {
-        setNearbyRestaurantsActive(true)
-        setTopRestaurantsActive(false)
-      }
-    }
+    if (highlightChip) setNearbyRestaurantsActive(true)
 
     setLocMode(mode)
     setLocLoading(true)
 
     const finishWithoutLocation = (message: string) => {
       setNearbyOffers([])
-      setTopRestaurantsActive(false)
       setNearbyRestaurantsActive(false)
       setLocMode(null)
       setLocLoading(false)
@@ -337,14 +224,9 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     }
 
     if (demoMode) {
-      const localOffers = initialOffers.filter((offer) =>
-        mode === 'nearby'
-          ? offer.restaurants?.city === 'Karachi'
-          : offer.restaurants?.is_featured
-      )
+      const localOffers = initialOffers.filter((offer) => offer.restaurants?.city === 'Karachi')
       setNearbyOffers(localOffers)
-      setTopRestaurantsActive(mode === 'top')
-      setNearbyRestaurantsActive(mode === 'nearby')
+      setNearbyRestaurantsActive(true)
       setLocMode(null)
       setLocLoading(false)
       toast.success(`Showing ${localOffers.length} demo restaurants in Karachi`)
@@ -353,22 +235,15 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
 
     const loadByCoords = async (lat: number, lng: number) => {
       try {
-        const data = await fetchNearbyRestaurants(lat, lng, mode)
-        applyNearbyResults(mode, data, { activate: activateOnSuccess })
+        const data = await fetchNearbyRestaurants(lat, lng)
+        applyNearbyResults(data, { activate: activateOnSuccess })
         if (activateOnSuccess && !options?.silent) {
-          toast.success(
-            mode === 'top'
-              ? `Found ${data.length} top restaurants`
-              : `Found ${data.length} nearby restaurants`
-          )
+          toast.success(`Found ${data.length} nearby restaurants`)
         }
       } catch (err) {
         console.error('Failed to load nearby restaurants:', err)
         setNearbyOffers([])
-        if (highlightChip || activateOnSuccess) {
-          setTopRestaurantsActive(false)
-          setNearbyRestaurantsActive(false)
-        }
+        if (highlightChip || activateOnSuccess) setNearbyRestaurantsActive(false)
         if (!options?.silent) {
           toast.error('Could not load restaurants near you')
         }
@@ -453,7 +328,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     ? [...offers, ...nearbyOffers].filter(
         (o, index, arr) => savedOfferIds.has(o.id) && arr.findIndex((x) => x.id === o.id) === index
       )
-    : (topRestaurantsActive || nearbyRestaurantsActive ? nearbyOffers : offers)
+    : (nearbyRestaurantsActive ? nearbyOffers : offers)
 
   const filtered = activeOffersList.filter((o) => {
     const searchTerm = normalizeFilterValue(search.trim())
@@ -475,23 +350,17 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     const matchesBrowseTab =
       browseTab !== 'featured' || Boolean(o.restaurants?.is_featured)
 
-    const disc = discountPct(o)
-    let matchesDiscount = true
-    if (selectedDiscount !== 'all') {
-      const sel = DISCOUNT_RANGES.find((r) => r.id === selectedDiscount)
-      if (sel && typeof sel.min === 'number') {
-        matchesDiscount = disc >= (sel.min ?? 0) && disc <= (sel.max ?? sel.min ?? disc)
-      }
-    }
-
-    return matchesSearch && matchesCity && matchesCuisine && matchesBrowseTab && matchesDiscount
+    return matchesSearch && matchesCity && matchesCuisine && matchesBrowseTab
   }).sort((a, b) => {
     if (browseTab !== 'latest') return 0
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
+  const filteredRestaurants = filtered.filter(
+    (offer, index, list) =>
+      list.findIndex((item) => item.restaurants?.id === offer.restaurants?.id) === index
+  )
 
   const clearLocationFilter = () => {
-    setTopRestaurantsActive(false)
     setNearbyRestaurantsActive(false)
     setNearbyOffers([])
   }
@@ -532,13 +401,18 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
     }
   }
 
-  const handleOpenClaimModal = async (offer: OfferWithRestaurant) => {
+  const openRestaurant = (offer: OfferWithRestaurant, link?: HTMLAnchorElement) => {
+    const restaurantId = offer.restaurants?.id
+    if (!restaurantId) return
+
+    detailScrollPosition.current = window.scrollY
+    openedFromDiscover.current = true
+    lastRestaurantLink.current = link || null
     try {
       const recent: unknown = JSON.parse(localStorage.getItem('esr_recent_restaurants') || '[]')
       const recentIds = Array.isArray(recent)
         ? recent.filter((id): id is string => typeof id === 'string')
         : []
-      const restaurantId = offer.restaurants?.id || offer.restaurant_id
       localStorage.setItem(
         'esr_recent_restaurants',
         JSON.stringify([restaurantId, ...recentIds.filter((id) => id !== restaurantId)].slice(0, 5))
@@ -548,102 +422,58 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
       console.error('Could not update recently viewed restaurants:', error)
     }
 
-    if (!demoMode && !isDbOfferId(offer.id)) {
-      toast.error('This nearby listing is not in the ESR catalog yet, so it cannot be claimed.')
-      return
-    }
-    if (!demoMode && !userId) {
-      toast.error('Please sign in to claim this voucher')
-      router.push('/auth/login')
-      return
-    }
-
-    setSelectedClaimOffer(offer)
-    setIsCopied(false)
-    setActiveVoucherCode('')
-    setClaimError('')
-
-    const restaurantKey = offer.restaurants?.id || offer.restaurant_id || offer.id
-    if (claimedOfferIds.has(offer.id) || reviewedRestaurantIds.has(restaurantKey)) {
-      setModalStep('claim')
-      await persistClaim(offer)
-      return
-    }
-
-    setReviewText('')
-    setReviewRating(5)
-    setModalStep('review')
+    window.history.pushState(null, '', `#restaurant/${encodeURIComponent(restaurantId)}`)
+    setSelectedRestaurantId(restaurantId)
+    window.scrollTo({ top: 0, behavior: 'instant' })
   }
 
-  const handleSendReviewAndProceed = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!reviewText.trim()) {
-      toast.error('Please write a short review before unlocking your voucher.')
+  const returnToDiscover = () => {
+    if (openedFromDiscover.current) {
+      window.history.back()
       return
     }
-    if (!selectedClaimOffer) return
-
-    setIsSubmittingReview(true)
-    const restaurantId = selectedClaimOffer.restaurants?.id || selectedClaimOffer.restaurant_id
-    try {
-      if (demoMode) {
-        const updatedReviews = new Set(reviewedRestaurantIds).add(restaurantId)
-        setReviewedRestaurantIds(updatedReviews)
-        localStorage.setItem('esr_reviewed_restaurants', JSON.stringify(Array.from(updatedReviews)))
-        setModalStep('claim')
-        await persistClaim(selectedClaimOffer)
-        return
-      }
-
-      const reviewRes = await fetch('/api/reviews', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          restaurant_id: restaurantId,
-          offer_id: selectedClaimOffer.id,
-          comment: reviewText.trim(),
-          rating_overall: reviewRating,
-          rating_taste: reviewRating,
-          rating_ambiance: reviewRating,
-          rating_quality: reviewRating,
-          rating_money_value: reviewRating,
-        }),
-      })
-      if (reviewRes.status === 401) {
-        toast.error('Please sign in to submit a review')
-        router.push('/auth/login')
-        return
-      }
-      if (!reviewRes.ok) {
-        const data = await reviewRes.json().catch(() => ({}))
-        toast.error(data.error || 'Could not save review')
-        return
-      }
-
-      const restaurantKey = restaurantId || selectedClaimOffer.id
-      const updatedReviews = new Set(reviewedRestaurantIds)
-      updatedReviews.add(restaurantKey)
-      setReviewedRestaurantIds(updatedReviews)
-      localStorage.setItem('esr_reviewed_restaurants', JSON.stringify(Array.from(updatedReviews)))
-
-      setModalStep('claim')
-      await persistClaim(selectedClaimOffer)
-    } finally {
-      setIsSubmittingReview(false)
-    }
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    setSelectedRestaurantId(null)
   }
 
-  const copyCouponCode = (code: string) => {
-    navigator.clipboard.writeText(code)
-    setIsCopied(true)
-    toast.success('Voucher code copied')
-    setTimeout(() => setIsCopied(false), 2000)
-  }
+  const allOffers = [...offers, ...nearbyOffers].filter(
+    (offer, index, list) => list.findIndex((item) => item.id === offer.id) === index
+  )
+  const selectedOffer = selectedRestaurantId
+    ? allOffers.find((offer) => offer.restaurants?.id === selectedRestaurantId)
+    : undefined
+  const selectedRestaurant = selectedOffer?.restaurants
+  const restaurantOffers = selectedRestaurant
+    ? allOffers.filter((offer) => offer.restaurants?.id === selectedRestaurant.id)
+    : []
 
-  const currentDiscountLabel = DISCOUNT_RANGES.find((r) => r.id === selectedDiscount)?.label || 'All Discounts'
+  if (selectedRestaurant) {
+    return (
+      <RestaurantDetailView
+        key={selectedRestaurant.id}
+        restaurant={selectedRestaurant}
+        offers={restaurantOffers}
+        demoMode={demoMode}
+        userId={userId}
+        claimedOfferIds={claimedOfferIds}
+        reviewedRestaurantIds={reviewedRestaurantIds}
+        onClaimed={(offerId) => {
+          setClaimedOfferIds((current) => {
+            const next = new Set(current).add(offerId)
+            if (demoMode) localStorage.setItem('esr_demo_claimed_offers', JSON.stringify(Array.from(next)))
+            return next
+          })
+        }}
+        onReviewed={(restaurantId) =>
+          setReviewedRestaurantIds((current) => new Set(current).add(restaurantId))
+        }
+        onBack={returnToDiscover}
+      />
+    )
+  }
 
   return (
-    <div className="esr-discover relative mx-auto max-w-7xl space-y-8 px-4 py-6 sm:px-6 lg:py-10">
+    <div className="esr-discover relative mx-auto max-w-[1140px] space-y-8 px-4 py-6 sm:px-6 lg:py-10">
       {demoMode && (
         <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-[var(--plum)]">
           Interactive demo · sample restaurants and offers · favorites and vouchers stay in this browser.
@@ -709,12 +539,12 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {ads.map((ad) => {
             const card = (
-              <div className="relative h-36 rounded-2xl overflow-hidden border border-red-100 bg-red-50">
+              <div className="relative h-36 overflow-hidden rounded-2xl border border-[var(--border)] bg-[#F9E4E2]">
                 {ad.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={ad.image_url} alt={ad.title} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="h-full flex items-center justify-center text-sm font-bold text-red-700 px-4 text-center">
+                  <div className="flex h-full items-center justify-center px-4 text-center text-sm font-semibold text-[var(--plum)]">
                     {ad.title}
                   </div>
                 )}
@@ -735,80 +565,33 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
       )}
 
       {(featured.length > 0 || bumper.length > 0) && (
-        <DealStripCarousel featured={featured} bumper={bumper} onClaim={handleOpenClaimModal} />
+        <DealStripCarousel featured={featured} bumper={bumper} onOpen={openRestaurant} />
       )}
 
-      <div className="flex flex-col items-stretch gap-3 sm:flex-row">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-xs sm:flex-row">
+      <div className="flex min-w-0 flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white sm:flex-row">
           <div className="relative min-w-0 flex-1">
             <label htmlFor="restaurant-search" className="sr-only">Search restaurants, cuisine, or area</label>
-            <Search aria-hidden="true" className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--muted)]" size={18} />
             <input
               id="restaurant-search"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Restaurant, cuisine or area — e.g. Gulberg"
-              className="w-full border-0 bg-transparent py-3 pl-11 pr-4 text-base font-medium text-[var(--foreground)] placeholder:text-[var(--muted)] focus:outline-none focus:ring-0"
+              className="min-h-14 w-full border-0 bg-transparent px-4 py-3 text-base font-normal text-[var(--foreground)] placeholder:text-[var(--muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--crimson)]"
             />
           </div>
-          <div className="relative border-t border-[var(--border)] sm:border-l sm:border-t-0">
+          <div className="relative m-1.5 rounded-xl bg-[#F9E4E2] sm:ml-0 sm:rounded-l-none">
             <label htmlFor="restaurant-city" className="sr-only">Filter by city</label>
             <select
               id="restaurant-city"
               value={selectedCity}
               onChange={(event) => setSelectedCity(event.target.value)}
-              className="h-full min-h-12 w-full appearance-none bg-[var(--surface-muted)] py-3 pl-4 pr-10 text-sm font-semibold text-[var(--plum)] focus-visible:relative focus-visible:z-10 sm:w-48"
+              className="h-full min-h-12 w-full appearance-none rounded-xl border-0 bg-transparent py-3 pl-4 pr-10 text-sm font-medium text-[var(--plum)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--crimson)] sm:w-48"
             >
               {CITY_FILTERS.map((city) => <option key={city} value={city}>{city}</option>)}
             </select>
             <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--plum)]" size={16} />
           </div>
-        </div>
-
-        <div className="relative w-full sm:w-auto">
-          <button
-            type="button"
-            aria-expanded={showFilterDropdown}
-            aria-controls="discount-filter-options"
-            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-            className={`w-full sm:w-auto flex items-center justify-between sm:justify-center gap-2 px-5 py-3 border rounded-2xl text-xs font-bold transition-all shadow-xs ${
-              selectedDiscount !== 'all' || showFilterDropdown
-                ? 'bg-red-100 border-red-600 text-red-600'
-                : 'bg-red-50/80 border-red-200 text-red-950 hover:bg-red-100'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <SlidersHorizontal size={16} className={selectedDiscount !== 'all' ? 'text-red-600' : 'text-red-900'} />
-              <span>{selectedDiscount === 'all' ? 'Sort' : currentDiscountLabel}</span>
-            </div>
-            <ChevronDown size={14} className={`transition-transform ${showFilterDropdown ? 'rotate-180' : ''}`} />
-          </button>
-
-          {showFilterDropdown && (
-            <div id="discount-filter-options" className="absolute top-full right-0 mt-2 w-full sm:w-60 bg-white border border-red-100 rounded-2xl shadow-xl z-30 py-2">
-              <p className="px-4 py-1.5 text-xs font-extrabold uppercase tracking-wider text-[var(--muted)]">
-                Discount Rate
-              </p>
-              {DISCOUNT_RANGES.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  aria-pressed={selectedDiscount === r.id}
-                  onClick={() => {
-                    setSelectedDiscount(r.id)
-                    setShowFilterDropdown(false)
-                  }}
-                  className={`min-h-11 w-full px-4 py-2.5 text-left text-sm font-bold transition-colors ${
-                    selectedDiscount === r.id ? 'text-red-600 bg-red-50' : 'text-gray-700 hover:bg-red-50'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by cuisine">
@@ -825,135 +608,28 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
         ))}
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        <button
-          type="button"
-          aria-pressed={activeCategory === 'all' && !topRestaurantsActive && !nearbyRestaurantsActive}
-          onClick={() => {
-            clearLocationFilter()
-            setActiveCategory('all')
-          }}
-          className={`text-xs font-bold px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap ${
-            activeCategory === 'all' && !topRestaurantsActive && !nearbyRestaurantsActive
-              ? 'bg-red-50 text-red-600 border border-red-300 shadow-xs'
-              : 'bg-red-50/40 text-gray-700 hover:bg-red-50 border border-transparent'
-          }`}
-        >
-          <span>All Offers</span>
-        </button>
-
-        <button
-          type="button"
-          aria-pressed={topRestaurantsActive}
-          onClick={() => {
-            setActiveCategory('all')
-            handleLocationFilter('top')
-          }}
-          disabled={locLoading}
-          className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap ${
-            topRestaurantsActive
-              ? 'bg-red-600 text-white shadow-md'
-              : 'bg-red-50/40 text-gray-700 hover:bg-red-50 border border-transparent'
-          }`}
-        >
-          <MapPin size={14} className={topRestaurantsActive ? 'text-white' : 'text-red-600'} />
-          <span>Top Restaurants</span>
-        </button>
-
-        <button
-          type="button"
-          aria-pressed={nearbyRestaurantsActive}
-          onClick={() => {
-            setActiveCategory('all')
-            handleLocationFilter('nearby')
-          }}
-          disabled={locLoading}
-          className={`flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap ${
-            nearbyRestaurantsActive
-              ? 'bg-red-600 text-white shadow-md'
-              : 'bg-red-50/40 text-gray-700 hover:bg-red-50 border border-transparent'
-          }`}
-        >
-          <MapPin size={14} className={nearbyRestaurantsActive ? 'text-white' : 'text-red-600'} />
-          <span>Nearby Restaurants</span>
-        </button>
-
-        <button
-          type="button"
-          aria-pressed={activeCategory === 'verified-reviews'}
-          onClick={() => setActiveCategory('verified-reviews')}
-          className={`text-xs font-bold px-3.5 py-2 rounded-2xl transition-all whitespace-nowrap ${
-            activeCategory === 'verified-reviews'
-              ? 'bg-red-50 text-red-600 border border-red-300 shadow-xs'
-              : 'bg-red-50/40 text-gray-700 hover:bg-red-50 border border-transparent'
-          }`}
-        >
-          <span>Verified Reviews</span>
-        </button>
-      </div>
-
-      {activeCategory === 'verified-reviews' && (
-        <section className="space-y-4 pt-2">
-          <div className="flex items-center gap-2 mb-2">
-            <ShieldCheck className="w-5 h-5 text-red-600" />
-            <h2 className="text-xl font-black text-gray-900">Verified Customer Reviews</h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {VERIFIED_REVIEWS.map((rev) => (
-              <div key={rev.id} className="bg-white rounded-2xl border border-red-100 p-4 shadow-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="relative w-10 h-10 rounded-full overflow-hidden bg-red-100">
-                      <Image src={rev.userAvatar} alt={rev.userName} fill className="object-cover" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-gray-900">{rev.userName}</h4>
-                      <p className="text-xs text-gray-400">{rev.date}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 text-amber-500 bg-amber-50 px-2 py-1 rounded-lg text-xs font-extrabold">
-                    <Star size={12} className="fill-amber-500" />
-                    <span>{rev.rating}.0</span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-red-600">{rev.dishName} • {rev.restaurantName}</p>
-                  <p className="text-xs text-gray-700 mt-1 leading-relaxed">{rev.reviewText}</p>
-                </div>
-                <div className="relative h-44 rounded-xl overflow-hidden bg-gray-100">
-                  <Image src={rev.image} alt={rev.dishName} fill className="object-cover" />
-                </div>
-                <span className="inline-block bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2.5 py-1 rounded-md">
-                  ✓ Photo & Order Receipt Verified
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {(activeCategory === 'all' || activeCategory === 'saved' || topRestaurantsActive || nearbyRestaurantsActive) && (
+      {(activeCategory === 'all' || activeCategory === 'saved' || nearbyRestaurantsActive) && (
         <section className="pt-2">
-          <div className="flex items-center gap-2 mb-4">
-            <Tag className="w-5 h-5 text-red-600" />
-            <h2 className="text-xl font-black text-gray-900">
-              {activeCategory === 'saved' ? 'Saved Offers' : topRestaurantsActive ? 'Top Restaurants' : nearbyRestaurantsActive ? 'Nearby Restaurants' : search ? `Results for "${search}"` : 'All Restaurant Offers'}
-            </h2>
-            <span aria-live="polite" aria-atomic="true" className="text-sm font-bold text-[var(--plum)] bg-[var(--surface-muted)] px-3 py-1 rounded-full">
-              {filtered.length}
-              <span className="sr-only"> matching offers</span>
+          <div className="mb-5">
+            <p className="esr-eyebrow">Local flavours, lovely savings</p>
+            <h2 className="esr-serif mt-2 text-3xl font-normal sm:text-4xl">Find a table worth sharing.</h2>
+            <span aria-live="polite" aria-atomic="true" className="sr-only">
+              {filteredRestaurants.length} matching restaurants
+            </span>
+            <span aria-hidden="true" className="mt-3 inline-flex rounded-full bg-[var(--surface-muted)] px-3 py-1 text-sm font-medium text-[var(--plum)]">
+              {filteredRestaurants.length} restaurants
             </span>
           </div>
 
           {locLoading && locMode ? (
             <PageLoader
               label={
-                locMode === 'top'
-                  ? 'Finding top restaurants near you…'
-                  : 'Locating restaurants within 250m…'
+                locMode === 'nearby'
+                  ? 'Finding restaurants near you…'
+                  : 'Loading restaurants…'
               }
             />
-          ) : filtered.length === 0 ? (
+          ) : filteredRestaurants.length === 0 ? (
             <div aria-live="polite" className="rounded-3xl border border-dashed border-[var(--border)] bg-white/70 py-16 text-center">
               <div className="mb-3 text-5xl" aria-hidden="true">🍽️</div>
               <p className="font-semibold text-[var(--plum)]">
@@ -966,7 +642,6 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
                     setSearch('')
                     setSelectedCity('All cities')
                     setActiveCuisine('All')
-                    setSelectedDiscount('all')
                     setBrowseTab('featured')
                     clearLocationFilter()
                   }}
@@ -977,182 +652,20 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filtered.map((offer, idx) => (
+            <div className="grid auto-rows-fr grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredRestaurants.map((offer) => (
                 <OfferCard
                   key={offer.id}
                   offer={offer}
-                  index={idx}
                   discountPct={discountPct(offer)}
                   isSaved={savedOfferIds.has(offer.id)}
-                  claimed={claimedOfferIds.has(offer.id)}
                   onToggleSave={(e) => handleToggleSave(e, offer)}
-                  onClaim={handleOpenClaimModal}
+                  onOpen={(event) => openRestaurant(offer, event.currentTarget)}
                 />
               ))}
             </div>
           )}
         </section>
-      )}
-
-      {selectedClaimOffer && modalStep && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white w-full max-w-md rounded-3xl overflow-hidden shadow-2xl border border-red-100 animate-in fade-in zoom-in-95 duration-200">
-            {modalStep === 'review' && (
-              <div>
-                <div className="relative bg-gradient-to-r from-red-600 to-red-700 text-white p-5 text-center">
-                  <button
-                    onClick={() => {
-                      setModalStep(null)
-                      setSelectedClaimOffer(null)
-                    }}
-                    className="absolute top-4 right-4 p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-2 text-white">
-                    <MessageSquarePlus size={24} />
-                  </div>
-                  <h3 className="font-black text-xl">Review to Unlock Voucher</h3>
-                  <p className="text-xs text-red-100">Share your review for {selectedClaimOffer.restaurants?.name} first. Future claims for this spot will unlock instantly!</p>
-                </div>
-
-                <form onSubmit={handleSendReviewAndProceed} className="p-6 space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Rate your experience</label>
-                    <div className="flex items-center gap-2">
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <button
-                          type="button"
-                          key={star}
-                          onClick={() => setReviewRating(star)}
-                          className="p-1 focus:outline-none"
-                        >
-                          <Star
-                            size={24}
-                            className={star <= reviewRating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}
-                          />
-                        </button>
-                      ))}
-                      <span className="text-xs font-black text-amber-600 ml-2">{reviewRating}.0 Stars</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Your Review & Feedback</label>
-                    <textarea
-                      required
-                      value={reviewText}
-                      onChange={(e) => setReviewText(e.target.value)}
-                      placeholder="How was the food, ambiance, or service?"
-                      rows={3}
-                      className="w-full p-3 bg-red-50/50 border border-red-200 rounded-2xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-red-300 text-gray-800 placeholder:text-gray-400"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmittingReview}
-                    className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-extrabold rounded-2xl text-xs transition-all shadow-md flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingReview ? (
-                      <span>Saving Review...</span>
-                    ) : (
-                      <>
-                        <Send size={15} />
-                        <span>Submit Review & Claim Voucher</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-            )}
-
-            {modalStep === 'claim' && (
-              <div>
-                <div className="relative bg-gradient-to-r from-red-600 to-red-700 text-white p-5 text-center">
-                  <button
-                    onClick={() => {
-                      setModalStep(null)
-                      setSelectedClaimOffer(null)
-                    }}
-                    className="absolute top-4 right-4 p-1.5 rounded-full bg-black/20 hover:bg-black/40 text-white transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                  <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-2 text-white">
-                    <Ticket size={24} />
-                  </div>
-                  <h3 className="font-black text-xl">Voucher Unlocked!</h3>
-                  <p className="text-xs text-red-100">Show this code at checkout to enjoy your deal.</p>
-                </div>
-
-                <div className="p-6 space-y-5 text-center">
-                  <div>
-                    <p className="text-xs font-bold text-red-600 uppercase tracking-wider">
-                      {selectedClaimOffer.restaurants?.name}
-                    </p>
-                    <h4 className="text-base font-extrabold text-gray-900 mt-0.5">
-                      {selectedClaimOffer.name}
-                    </h4>
-                    <div className="flex items-center justify-center gap-2 mt-2">
-                      <span className="text-lg font-black text-red-600">
-                        Rs. {selectedClaimOffer.discounted_price}
-                      </span>
-                      {selectedClaimOffer.original_price > 0 && (
-                        <span className="text-xs text-gray-400 line-through">
-                          Rs. {selectedClaimOffer.original_price}
-                        </span>
-                      )}
-                      <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full">
-                        {discountPct(selectedClaimOffer)}% OFF
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="bg-red-50/70 border-2 border-dashed border-red-300 rounded-2xl p-4 relative space-y-1">
-                    <p className="text-[10px] font-extrabold text-gray-400 uppercase tracking-widest">
-                      Show this code at checkout
-                    </p>
-                    <div className="text-2xl font-black text-gray-900 tracking-wider">
-                      {isClaiming ? 'Claiming…' : activeVoucherCode || claimError || '—'}
-                    </div>
-                    {activeVoucherCode && (
-                      <p className="flex items-center justify-center gap-1 text-xs font-bold text-red-600">
-                        <Clock size={13} />
-                        Refreshes in {voucherCountdown}
-                      </p>
-                    )}
-
-                    {activeVoucherCode && (
-                    <button
-                      onClick={() => copyCouponCode(activeVoucherCode)}
-                      className="mt-2 inline-flex items-center gap-1.5 bg-white border border-red-200 text-red-600 hover:bg-red-100 text-xs font-bold px-3 py-1.5 rounded-xl shadow-2xs transition-all"
-                    >
-                      {isCopied ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                      <span>{isCopied ? 'Copied Code!' : 'Copy Code'}</span>
-                    </button>
-                    )}
-                  </div>
-
-                  <p className="text-xs text-gray-500 font-medium">
-                    This ESR- code is unique to this offer and refreshes every 30 minutes. Staff see the same code in admin.
-                  </p>
-
-                  <button
-                    onClick={() => {
-                      setModalStep(null)
-                      setSelectedClaimOffer(null)
-                    }}
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs transition-colors shadow-md"
-                  >
-                    Done / Back to Offers
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       )}
     </div>
   )
@@ -1161,11 +674,11 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
 function DealStripCarousel({
   featured,
   bumper,
-  onClaim,
+  onOpen,
 }: {
   featured: OfferWithRestaurant[]
   bumper: OfferWithRestaurant[]
-  onClaim: (offer: OfferWithRestaurant) => void
+  onOpen: (offer: OfferWithRestaurant) => void
 }) {
   const items = [
     ...featured.map((offer) => ({ offer, kind: 'featured' as const })),
@@ -1188,14 +701,14 @@ function DealStripCarousel({
             <button
               key={`${item.kind}-${item.offer.id}-${index}`}
               type="button"
-              onClick={() => onClaim(item.offer)}
+              onClick={() => onOpen(item.offer)}
               className={`flex w-[220px] shrink-0 flex-col rounded-2xl border p-3 text-left shadow-xs transition-shadow hover:shadow-md ${
                 isBumper
                   ? 'border-amber-200 bg-amber-50'
-                  : 'border-red-100 bg-white'
+                  : 'border-[var(--border)] bg-white'
               }`}
             >
-              <p className={`text-[10px] font-extrabold uppercase ${isBumper ? 'text-amber-700' : 'text-red-600'}`}>
+              <p className={`text-xs font-semibold uppercase ${isBumper ? 'text-amber-800' : 'text-[var(--crimson)]'}`}>
                 {isBumper ? 'Bumper deal' : 'Featured'}
               </p>
               <p className="mt-1 line-clamp-2 text-sm font-bold text-gray-900">{item.offer.name}</p>
@@ -1210,34 +723,29 @@ function DealStripCarousel({
 
 function OfferCard({
   offer,
-  index,
   discountPct,
   isSaved,
-  claimed,
   onToggleSave,
-  onClaim,
+  onOpen,
 }: {
   offer: OfferWithRestaurant
-  index: number
   discountPct: number
   isSaved?: boolean
-  claimed?: boolean
   onToggleSave?: (e: React.MouseEvent) => void
-  onClaim?: (offer: OfferWithRestaurant) => void
+  onOpen: (event: React.MouseEvent<HTMLAnchorElement>) => void
 }) {
   const restaurantName = offer.restaurants?.name || offer.name
-  const assignedImage =
+  const demoImage: Record<string, string> = {
+    'demo-karachi-karahi': 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=1200&q=85',
+    'demo-bun-kabab': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=1200&q=85',
+    'demo-lahori-dastarkhwan': 'https://images.unsplash.com/photo-1579751626657-72bc17010498?auto=format&fit=crop&w=1200&q=85',
+    'demo-oven-story': 'https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?auto=format&fit=crop&w=1200&q=85',
+  }
+  const assignedImage = demoImage[offer.restaurant_id] ||
     offer.restaurants?.cover_url ||
     offer.restaurants?.logo_url ||
     offer.image_url ||
     null
-
-  const photoVerified =
-    Boolean(assignedImage) &&
-    (Boolean((offer as { photo_verified?: boolean }).photo_verified) ||
-      assignedImage!.includes('/api/restaurants/photo') ||
-      assignedImage!.includes('googleusercontent.com'))
-
   const needsUnoptimized =
     Boolean(assignedImage) &&
     (assignedImage!.startsWith('/api/') ||
@@ -1245,93 +753,63 @@ function OfferCard({
       assignedImage!.includes('places.googleapis.com') ||
       assignedImage!.includes('commons.wikimedia.org'))
 
+  const cuisine = offer.restaurants?.categories?.name || 'Restaurant'
+  const locationLine = `${cuisine} · ${offer.restaurants?.address || offer.restaurants?.city || ''}${offer.restaurants?.address && offer.restaurants?.city ? `, ${offer.restaurants.city}` : ''}`
+
   return (
-    <article className="group flex w-full flex-col overflow-hidden rounded-2xl border border-[var(--border)] bg-white shadow-xs transition-shadow duration-300 hover:shadow-lg">
-      <div className="relative aspect-[16/10] bg-gradient-to-br from-red-100 via-orange-50 to-amber-100">
-        {assignedImage ? (
-          <Image
-            src={assignedImage}
-            alt={`Food at ${restaurantName}`}
-            fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            unoptimized={needsUnoptimized}
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-red-700/80 px-4 text-center">
-            <span className="text-4xl font-black opacity-40 mb-1">
+    <article className="esr-restaurant-card group relative flex h-full flex-col overflow-hidden rounded-[19px] border border-[var(--border)] bg-white">
+      <a
+        href={`#restaurant/${encodeURIComponent(offer.restaurants?.id || offer.restaurant_id)}`}
+        aria-label={`Explore ${restaurantName}`}
+        onClick={(event) => {
+          event.preventDefault()
+          onOpen(event)
+        }}
+        className="flex h-full flex-col rounded-[18px] text-left text-inherit focus-visible:outline focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-[var(--crimson)]"
+      >
+        <div className="relative aspect-[11/6] w-full shrink-0 bg-[var(--surface-muted)]">
+          {assignedImage ? (
+            <Image
+              src={assignedImage}
+              alt={`Food at ${restaurantName}`}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 360px"
+              unoptimized={needsUnoptimized}
+              className="object-cover"
+            />
+          ) : (
+            <div className="absolute inset-0 grid place-items-center text-4xl text-[var(--muted)]" aria-hidden="true">
               {restaurantName.charAt(0).toUpperCase()}
-            </span>
-            <span className="text-sm font-semibold">{restaurantName}</span>
-          </div>
-        )}
-
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5 items-start">
-          {discountPct > 0 && (
-            <span className="rounded-full bg-[#fff0ed] px-3 py-1.5 text-xs font-extrabold uppercase text-[var(--plum)] shadow-sm">
-              {discountPct}% off
-            </span>
+            </div>
           )}
-          {photoVerified && (
-            <span className="bg-slate-900/80 backdrop-blur-md text-white text-[9px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1">
-              <CheckCircle2 size={10} className="text-emerald-400" />
-              <span>Photo Verified</span>
+          <span className="absolute bottom-3 left-3 rounded-full bg-[#F9E4E2] px-3 py-2 text-xs font-semibold tracking-wide text-[var(--plum)]">
+            {discountPct}% OFF · DINE-IN
+          </span>
+        </div>
+        <div className="flex flex-1 flex-col px-5 pb-4 pt-4">
+          <h3 className="esr-serif text-2xl font-normal leading-snug">{restaurantName}</h3>
+          <p className="mt-1 min-h-6 text-sm leading-6 text-[var(--muted)]">{locationLine}</p>
+          <div className="mt-auto flex min-h-14 items-center justify-between gap-3 border-t border-dashed border-[var(--border)] pt-3">
+            <span className="text-sm font-semibold text-[var(--crimson)]">
+              Approx. PKR {offer.discounted_price.toLocaleString('en-US')} / person
             </span>
-          )}
-        </div>
-
-        <button
-          type="button"
-          aria-label={`Save ${restaurantName}`}
-          aria-pressed={Boolean(isSaved)}
-          onClick={(e) => onToggleSave?.(e)}
-          className="absolute right-3 top-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-gray-700 shadow-xs backdrop-blur-md transition-colors hover:bg-white"
-        >
-          <Heart
-            size={16}
-            className={`transition-colors ${
-              isSaved ? 'fill-red-600 text-red-600' : 'text-gray-400 hover:text-red-600'
-            }`}
-            aria-hidden="true"
-          />
-        </button>
-      </div>
-
-      <div className="flex flex-1 flex-col justify-between p-4">
-        <div>
-          <div className="mb-1 flex items-center gap-1.5 text-sm font-medium text-[var(--muted)]">
-            <span>{offer.restaurants?.categories?.name || 'Restaurant'}</span>
-            {(offer.restaurants?.address || offer.restaurants?.city) && <span aria-hidden="true">·</span>}
-            {offer.restaurants?.address && <span className="truncate">{offer.restaurants.address}</span>}
-            {offer.restaurants?.city && <span>{offer.restaurants.city}</span>}
+            <span className="shrink-0 text-sm font-semibold text-[var(--crimson)]">Explore ↗</span>
           </div>
-
-          <h3 className="esr-serif text-xl font-bold leading-snug">
-            {restaurantName}
-          </h3>
-          <p className="mt-1 text-sm text-[var(--muted)]">{offer.name}</p>
         </div>
-
-        <div className="mt-4 flex items-center justify-between border-t border-dashed border-[var(--border)] pt-3">
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-base font-extrabold text-[var(--crimson)]">PKR {offer.discounted_price}</span>
-            {offer.original_price > 0 && (
-              <span className="text-sm text-[var(--muted)] line-through">PKR {offer.original_price}</span>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => onClaim?.(offer)}
-            aria-label={`${claimed ? 'View claimed voucher for' : 'Claim voucher for'} ${restaurantName}`}
-            className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-sm font-bold hover:underline ${
-              claimed ? 'text-emerald-800' : 'text-[var(--crimson)]'
-            }`}
-          >
-            {claimed ? 'Voucher claimed' : 'Claim voucher'} <Ticket aria-hidden="true" size={16} />
-          </button>
-        </div>
-      </div>
+      </a>
+      <button
+        type="button"
+        aria-label={`Save ${restaurantName}`}
+        aria-pressed={Boolean(isSaved)}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onToggleSave?.(event)
+        }}
+        className="absolute right-3 top-3 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full border border-[var(--border)] bg-white text-[var(--plum)] shadow-sm transition-colors hover:bg-[var(--surface-muted)]"
+      >
+        <Heart aria-hidden="true" size={19} className={isSaved ? 'fill-[var(--crimson)] text-[var(--crimson)]' : ''} />
+      </button>
     </article>
   )
 }
