@@ -27,33 +27,18 @@ export async function PUT(request: NextRequest) {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   if (profile?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const body: unknown = await request.json().catch(() => null)
-  if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Invalid user role update.' }, { status: 400 })
-  }
-  const { user_id, role, restaurant_id } = body as {
-    user_id?: unknown
-    role?: unknown
-    restaurant_id?: unknown
-  }
-  if (
-    typeof user_id !== 'string' ||
-    !['user', 'restaurant', 'admin'].includes(String(role)) ||
-    (restaurant_id !== undefined && typeof restaurant_id !== 'string')
-  ) {
-    return NextResponse.json({ error: 'Invalid user role update.' }, { status: 400 })
-  }
+  const { user_id, role, restaurant_id } = await request.json()
   const adminClient = await createAdminClient()
   const { data, error } = await adminClient
     .from('profiles')
-    .update({ role: role as 'user' | 'restaurant' | 'admin' })
+    .update({ role })
     .eq('id', user_id)
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  if (typeof restaurant_id === 'string') {
+  if (restaurant_id) {
     const { error: restaurantError } = await adminClient
       .from('restaurants')
       .update({ owner_id: user_id })

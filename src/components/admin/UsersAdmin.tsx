@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 
-const ROLES = ['user', 'restaurant', 'admin']
+const ROLES = ['customer', 'owner', 'admin']
 
 export default function UsersAdmin({ users, restaurants }: { users: Record<string, unknown>[]; restaurants: { id: string; name: string }[] }) {
   const router = useRouter()
@@ -62,7 +62,7 @@ export default function UsersAdmin({ users, restaurants }: { users: Record<strin
                   <td className="px-4 py-3">
                     <span className={`text-xs font-medium px-2 py-1 rounded-lg capitalize ${
                       u.role === 'admin' ? 'bg-red-100 text-red-600' :
-                      u.role === 'restaurant' ? 'bg-red-100 text-red-600' :
+                      u.role === 'owner' ? 'bg-red-100 text-red-600' :
                       'bg-gray-100 text-gray-500'
                     }`}>{u.role as string}</span>
                   </td>
