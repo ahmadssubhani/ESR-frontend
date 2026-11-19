@@ -474,11 +474,6 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
 
   return (
     <div className="esr-discover relative mx-auto max-w-[1140px] space-y-8 px-4 py-6 sm:px-6 lg:py-10">
-      {demoMode && (
-        <p className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-3 text-sm font-semibold text-[var(--plum)]">
-          Interactive demo · sample restaurants and offers · favorites and vouchers stay in this browser.
-        </p>
-      )}
       <section className="grid items-center gap-8 lg:grid-cols-[1fr_0.95fr] lg:gap-12" aria-labelledby="discover-title">
         <div className="py-2">
           <p className="esr-eyebrow">Pakistan, let&apos;s eat well</p>

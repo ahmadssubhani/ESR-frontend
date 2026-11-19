@@ -29,18 +29,13 @@ export default function SiteFooter() {
       <div className="max-w-6xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
           <div className="sm:col-span-2">
-            <Link href="/" className="inline-flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-red-600 to-red-400 flex items-center justify-center text-white font-black text-lg shadow-md">
-                E
-              </div>
-              <div className="flex flex-col">
-                <span className="esr-serif text-xl font-bold tracking-tight leading-none">
-                  esr<span className="text-[var(--gold)]">.</span>
-                </span>
-                <span className="text-[10px] font-bold tracking-wider text-[var(--muted)] uppercase">
-                  Eat Sleep Repeat
-                </span>
-              </div>
+            <Link href="/user/offers" className="group inline-flex flex-col leading-none" aria-label="ESR Discover">
+              <span className="esr-serif text-[1.7rem] font-bold tracking-tight">
+                esr<span className="text-[var(--gold)]">.</span>
+              </span>
+              <span className="mt-1 text-[0.625rem] font-bold tracking-[0.13em] text-[var(--muted)]">
+                EAT SLEEP REPEAT
+              </span>
             </Link>
             <p className="mt-4 text-sm leading-relaxed max-w-sm">
               Discover exclusive restaurant deals near you. Browse offers, redeem coupons, and eat better for less.
