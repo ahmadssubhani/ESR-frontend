@@ -99,7 +99,7 @@ export default function FavouritesClient({ initialItems, demoMode = false }: { i
                 <h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2">{offer.name}</h3>
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-[rgb(220, 38, 38)] font-black">Rs {offer.discounted_price}</span>
+                    <span className="text-[var(--crimson)] font-semibold">Rs {offer.discounted_price}</span>
                     {offer.original_price > 0 && <span className="text-gray-400 text-xs line-through ml-2">Rs {offer.original_price}</span>}
                   </div>
                 </div>

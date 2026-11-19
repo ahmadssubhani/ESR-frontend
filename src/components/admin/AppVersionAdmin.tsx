@@ -53,13 +53,13 @@ export default function AppVersionAdmin({ versions }: { versions: Record<string,
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Store Link</label>
             <input type="url" value={form.link_to_latest_version} onChange={e => setForm(f => ({ ...f, link_to_latest_version: e.target.value }))}
-              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" placeholder="https://play.google.com/…" />
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" placeholder="https://play.google.com/…" />
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_update_version} onChange={e => setForm(f => ({ ...f, is_update_version: e.target.checked }))} className="accent-[rgb(220, 38, 38)]" />
+            <input type="checkbox" checked={form.is_update_version} onChange={e => setForm(f => ({ ...f, is_update_version: e.target.checked }))} className="accent-[var(--crimson)]" />
             <span className="text-sm font-medium text-gray-700">Force Update</span>
           </label>
-          <button type="submit" disabled={loading} className="w-full bg-[rgb(220, 38, 38)] text-white font-semibold py-3 rounded-xl hover:bg-[#C4341F] transition-colors disabled:opacity-60">
+          <button type="submit" disabled={loading} className="esr-primary-button w-full py-3 transition-colors disabled:opacity-60">
             {loading ? <ButtonLoader label="Saving…" /> : 'Add Version'}
           </button>
         </form>

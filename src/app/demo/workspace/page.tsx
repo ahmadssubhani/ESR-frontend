@@ -142,7 +142,7 @@ export default function DemoWorkspacePage() {
                     <p className="truncate font-bold text-[var(--plum)]">{row.name}</p>
                     <p className="text-sm text-[var(--muted)]">{row.category} · {row.city}</p>
                   </div>
-                  <span className="rounded-full bg-[#fff0ed] px-3 py-1.5 text-sm font-bold text-[var(--plum)]">{row.discount}</span>
+                  <span className="rounded-full bg-[var(--surface-soft)] px-3 py-1.5 text-sm font-bold text-[var(--plum)]">{row.discount}</span>
                   <span className="min-w-16 text-right text-sm font-semibold text-[var(--muted)]">{row.status}</span>
                 </div>
               ))}

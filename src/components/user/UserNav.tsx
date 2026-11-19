@@ -137,7 +137,7 @@ export default function UserNav({ profile }: Props) {
                       <button
                         type="button"
                         aria-label="Close notifications"
-                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--plum)] hover:bg-[#f1dfdd]"
+                        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-[var(--plum)] hover:bg-[var(--surface-soft)]"
                       >
                         <X aria-hidden="true" size={20} />
                       </button>

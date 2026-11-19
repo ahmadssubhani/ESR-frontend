@@ -120,7 +120,7 @@ export default function RestaurantForm({ restaurant, categories }: { restaurant:
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
           <select value={form.category_id} onChange={e => set('category_id', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]">
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]">
             <option value="">Select…</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -128,14 +128,14 @@ export default function RestaurantForm({ restaurant, categories }: { restaurant:
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Price Level</label>
           <select value={form.price_level} onChange={e => set('price_level', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]">
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]">
             {PRICE_LEVELS.map(p => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Restaurant Type</label>
           <select value={form.restaurant_type} onChange={e => set('restaurant_type', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]">
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]">
             {RESTAURANT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
@@ -154,18 +154,18 @@ export default function RestaurantForm({ restaurant, categories }: { restaurant:
 
       <div className="flex gap-6">
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.is_featured} onChange={e => set('is_featured', e.target.checked)} className="accent-[rgb(220, 38, 38)]" />
+          <input type="checkbox" checked={form.is_featured} onChange={e => set('is_featured', e.target.checked)} className="accent-[var(--crimson)]" />
           <span className="text-sm font-medium text-gray-700">Featured Restaurant</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="accent-[rgb(220, 38, 38)]" />
+          <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="accent-[var(--crimson)]" />
           <span className="text-sm font-medium text-gray-700">Active</span>
         </label>
       </div>
 
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={loading}
-          className="flex-1 bg-[rgb(220, 38, 38)] text-white font-semibold py-3 rounded-xl hover:bg-[#C4341F] transition-colors disabled:opacity-60">
+          className="esr-primary-button flex-1 py-3 transition-colors disabled:opacity-60">
           {loading ? <ButtonLoader label="Saving…" /> : restaurant ? 'Save Changes' : 'Create Restaurant'}
         </button>
         {restaurant && (
@@ -185,7 +185,7 @@ function Field({ label, value, onChange, type = 'text', required, placeholder }:
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} required={required} placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+        className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
     </div>
   )
 }

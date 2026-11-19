@@ -430,7 +430,7 @@ export default function RestaurantDetailView({
               const percent = offer.original_price > 0 ? Math.ceil(100 - (offer.discounted_price / offer.original_price) * 100) : 0
               const defaultTitle = restaurant.id === 'demo-karachi-karahi' ? 'Karahi night, sorted' : offer.name
               return (
-                <article key={offer.id} className="rounded-2xl border border-[var(--border)] bg-[#F9E4E2] p-5 sm:p-6">
+                <article key={offer.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-5 sm:p-6">
                   <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
                     <div className="space-y-2">
                       <p className="esr-eyebrow">{percent}% off · Every day</p>
@@ -510,7 +510,7 @@ export default function RestaurantDetailView({
       </section>
 
       <section className="esr-reviews space-y-4 sm:space-y-5" aria-labelledby="diner-reviews-title">
-        <div className="esr-review-summary grid gap-4 rounded-[20px] border border-[#F0DCDC] p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
+        <div className="esr-review-summary grid gap-4 rounded-[20px] border border-[var(--border)] p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
           <div>
             <h2 id="diner-reviews-title" className="esr-serif text-2xl">Diner reviews</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">{reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}</p>
@@ -526,7 +526,7 @@ export default function RestaurantDetailView({
             setReviewSort(event.target.value)
             setVisibleReviewCount(6)
             setReviewSortAnnouncement(`Reviews sorted by ${sortLabels[event.target.value]}`)
-          }} className="min-h-11 w-full appearance-none rounded-xl border border-[#F0DCDC] bg-white py-2 pl-3 pr-10 text-base font-medium text-[var(--plum)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--crimson)] min-[481px]:w-56">
+          }} className="min-h-11 w-full appearance-none rounded-xl border border-[var(--input-border)] bg-white py-2 pl-3 pr-10 text-base font-medium text-[var(--plum)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--crimson)] min-[481px]:w-56">
             <option value="recent">Most recent</option>
             <option value="highest">Highest rated</option>
             <option value="lowest">Lowest rated</option>
@@ -551,19 +551,19 @@ export default function RestaurantDetailView({
               <li key={review.id} className="esr-card space-y-4 rounded-2xl p-5 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
-                    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F9E4E2] text-base font-bold text-[var(--crimson)]">{reviewerName.trim().charAt(0).toUpperCase() || 'E'}</span>
+                    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--surface-muted)] text-base font-bold text-[var(--crimson)]">{reviewerName.trim().charAt(0).toUpperCase() || 'E'}</span>
                     <div className="min-w-0">
                       <p className="text-base font-bold text-[var(--plum)]">{reviewerName}</p>
                       <p className="mt-1 text-sm text-[var(--muted)]">Sample review · <time dateTime={isoDate || undefined}>{formattedDate}</time></p>
                     </div>
                   </div>
-                  <div role="img" aria-label={`Rated ${rating} out of 5`} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-[#F9E4E2] px-3 text-sm font-bold text-[var(--plum)]">
+                  <div role="img" aria-label={`Rated ${rating} out of 5`} className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full bg-[var(--surface-muted)] px-3 text-sm font-bold text-[var(--plum)]">
                     <span aria-hidden="true">★</span> {rating}
                   </div>
                 </div>
                 <p className="text-base leading-[1.6] text-[var(--plum)]">{review.comment || 'No written comment.'}</p>
                 {review.restaurant_response && (
-                  <div className="rounded-r-xl border-l-[3px] border-[var(--crimson)] bg-[#FFF3F1] p-4">
+                  <div className="rounded-r-xl border-l-[3px] border-[var(--crimson)] bg-[var(--surface-soft)] p-4">
                     <p className="font-bold text-[var(--plum)]">Restaurant response</p>
                     <p className="mt-1 text-sm leading-6 text-[var(--plum)]">{review.restaurant_response}</p>
                   </div>

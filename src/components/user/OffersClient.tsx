@@ -534,7 +534,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {ads.map((ad) => {
             const card = (
-              <div className="relative h-36 overflow-hidden rounded-2xl border border-[var(--border)] bg-[#F9E4E2]">
+              <div className="relative h-36 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)]">
                 {ad.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={ad.image_url} alt={ad.title} className="w-full h-full object-cover" />
@@ -575,7 +575,7 @@ export default function OffersClient({ ads = [], featured = [], bumper = [], ini
               className="min-h-14 w-full border-0 bg-transparent px-4 py-3 text-base font-normal text-[var(--foreground)] placeholder:text-[var(--muted)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--crimson)]"
             />
           </div>
-          <div className="relative m-1.5 rounded-xl bg-[#F9E4E2] sm:ml-0 sm:rounded-l-none">
+          <div className="relative m-1.5 rounded-xl bg-[var(--surface-muted)] sm:ml-0 sm:rounded-l-none">
             <label htmlFor="restaurant-city" className="sr-only">Filter by city</label>
             <select
               id="restaurant-city"
@@ -777,7 +777,7 @@ function OfferCard({
               {restaurantName.charAt(0).toUpperCase()}
             </div>
           )}
-          <span className="absolute bottom-3 left-3 rounded-full bg-[#F9E4E2] px-3 py-2 text-xs font-semibold tracking-wide text-[var(--plum)]">
+          <span className="absolute bottom-3 left-3 rounded-full bg-[var(--surface-muted)] px-3 py-2 text-xs font-semibold tracking-wide text-[var(--plum)]">
             {discountPct}% OFF · DINE-IN
           </span>
         </div>

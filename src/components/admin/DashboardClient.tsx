@@ -155,8 +155,8 @@ export default function DashboardClient({
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {images.length > 0 && <ImageIcon size={14} className="text-gray-300" />}
                     <div className="flex items-center gap-1 bg-red-50 px-2 py-1 rounded-lg">
-                      <Star size={12} className="text-[rgb(220, 38, 38)] fill-current" />
-                      <span className="text-xs font-bold text-[rgb(220, 38, 38)]">{r.rating_overall as number}</span>
+                      <Star size={12} className="text-[var(--crimson)] fill-current" />
+                      <span className="text-xs font-bold text-[var(--crimson)]">{r.rating_overall as number}</span>
                     </div>
                   </div>
                 </div>

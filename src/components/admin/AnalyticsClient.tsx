@@ -1,6 +1,5 @@
 'use client'
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { Star } from 'lucide-react'
 
 interface Props {
   redemptionChart: { date: string; count: number }[]
@@ -31,11 +30,11 @@ export default function AnalyticsClient({ redemptionChart, topOffers, topRestaur
         {redemptionChart.length > 0 ? (
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={redemptionChart}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip />
-              <Line type="monotone" dataKey="count" stroke="rgb(220, 38, 38)" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="count" stroke="var(--crimson)" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         ) : (
@@ -74,7 +73,7 @@ export default function AnalyticsClient({ redemptionChart, topOffers, topRestaur
                 <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11 }} />
                 <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={100} />
                 <Tooltip formatter={(v) => [`${v} / 5`, 'Avg Rating']} />
-                <Bar dataKey="avg_rating" fill="rgb(220, 38, 38)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="avg_rating" fill="var(--crimson)" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -85,5 +84,3 @@ export default function AnalyticsClient({ redemptionChart, topOffers, topRestaur
     </div>
   )
 }
-
-

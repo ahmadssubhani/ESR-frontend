@@ -117,7 +117,7 @@ export default function OfferForm({ offer, restaurants, isAdmin }: { offer: Offe
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Offer Name *</label>
         <input value={form.name} onChange={e => set('name', e.target.value)} required
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
       </div>
 
       <div>
@@ -130,24 +130,24 @@ export default function OfferForm({ offer, restaurants, isAdmin }: { offer: Offe
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Original Price (Rs)</label>
           <input type="number" min="0" step="0.01" value={form.original_price} onChange={e => set('original_price', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Discounted Price (Rs) {discountPct > 0 && <span className="text-red-600 font-bold">— {discountPct}% OFF</span>}
           </label>
           <input type="number" min="0" step="0.01" value={form.discounted_price} onChange={e => set('discounted_price', e.target.value)}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Valid From *</label>
           <input type="datetime-local" value={form.valid_from} onChange={e => set('valid_from', e.target.value)} required
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Valid Till *</label>
           <input type="datetime-local" value={form.valid_till} onChange={e => set('valid_till', e.target.value)} required
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
         </div>
       </div>
 
@@ -161,23 +161,23 @@ export default function OfferForm({ offer, restaurants, isAdmin }: { offer: Offe
       <div className="flex gap-6 flex-wrap">
         {isAdmin && (
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.approval_status} onChange={e => set('approval_status', e.target.checked)} className="accent-[rgb(220, 38, 38)]" />
+            <input type="checkbox" checked={form.approval_status} onChange={e => set('approval_status', e.target.checked)} className="accent-[var(--crimson)]" />
             <span className="text-sm font-medium text-gray-700">Approved</span>
           </label>
         )}
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.is_bumper} onChange={e => set('is_bumper', e.target.checked)} className="accent-[rgb(220, 38, 38)]" />
+          <input type="checkbox" checked={form.is_bumper} onChange={e => set('is_bumper', e.target.checked)} className="accent-[var(--crimson)]" />
           <span className="text-sm font-medium text-gray-700">Bumper Activity</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.is_redeemable} onChange={e => set('is_redeemable', e.target.checked)} className="accent-[rgb(220, 38, 38)]" />
+          <input type="checkbox" checked={form.is_redeemable} onChange={e => set('is_redeemable', e.target.checked)} className="accent-[var(--crimson)]" />
           <span className="text-sm font-medium text-gray-700">Redeemable</span>
         </label>
       </div>
 
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={loading}
-          className="flex-1 bg-[rgb(220, 38, 38)] text-white font-semibold py-3 rounded-xl hover:bg-[#C4341F] transition-colors disabled:opacity-60">
+          className="esr-primary-button flex-1 py-3 transition-colors disabled:opacity-60">
           {loading ? <ButtonLoader label="Saving…" /> : offer ? 'Save Changes' : 'Create Offer'}
         </button>
         {offer && (

@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
 
 const exploreLinks = [
   { href: '/user/offers', label: 'Offers' },
@@ -18,12 +17,6 @@ const companyLinks = [
 ]
 
 export default function SiteFooter() {
-  const pathname = usePathname()
-
-  if (pathname.startsWith('/admin') || pathname.startsWith('/auth')) {
-    return null
-  }
-
   return (
     <footer className="mt-auto border-t border-[var(--border)] bg-[var(--surface-muted)] pb-20 text-[var(--muted)] md:pb-0">
       <div className="max-w-6xl mx-auto px-4 py-12">
@@ -70,7 +63,7 @@ export default function SiteFooter() {
         </div>
       </div>
 
-      <div className="border-t border-gray-800">
+      <div className="border-t border-[var(--border)]">
         <div className="max-w-6xl mx-auto px-4 py-5 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
           <p>© {new Date().getFullYear()} ESR. All rights reserved.</p>
           <p>Founded in Pakistan · Since 2016</p>

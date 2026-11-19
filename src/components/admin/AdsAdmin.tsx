@@ -126,7 +126,7 @@ export default function AdsAdmin({ ads: init }: { ads: Ad[] }) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                 <input value={form.title as string} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
@@ -138,12 +138,12 @@ export default function AdsAdmin({ ads: init }: { ads: Ad[] }) {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Expiry</label>
                 <input type="datetime-local" value={form.expiry as string} onChange={e => setForm(f => ({ ...f, expiry: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Deeplink URL</label>
                 <input type="url" value={form.deeplink as string} onChange={e => setForm(f => ({ ...f, deeplink: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[rgb(220, 38, 38)]" />
+                  className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--crimson)]" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Ad Image</label>
@@ -151,11 +151,11 @@ export default function AdsAdmin({ ads: init }: { ads: Ad[] }) {
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.is_active as boolean} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="accent-[rgb(220, 38, 38)]" />
+                <input type="checkbox" checked={form.is_active as boolean} onChange={e => setForm(f => ({ ...f, is_active: e.target.checked }))} className="accent-[var(--crimson)]" />
                 <span className="text-sm font-medium text-gray-700">Active</span>
               </label>
               <button onClick={save} disabled={loading}
-                className="w-full bg-[rgb(220, 38, 38)] text-white font-semibold py-3 rounded-xl hover:bg-[#C4341F] transition-colors disabled:opacity-60">
+                className="esr-primary-button w-full py-3 transition-colors disabled:opacity-60">
                 {loading ? <ButtonLoader label="Saving…" /> : 'Save Ad'}
               </button>
             </div>
